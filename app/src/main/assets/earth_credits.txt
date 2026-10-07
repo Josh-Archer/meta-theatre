@@ -1,0 +1,17 @@
+Earth texture attribution
+
+Original Earth day, night, cloud, normal and specular maps:
+Solar System Scope / INOVE
+https://www.solarsystemscope.com/textures/
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+The provider describes these Earth maps as adaptations of NASA imagery and geographic data.
+Downloaded 2026-10-04. These are artistic composites, not live Earth or city-light observations.
+
+Changes by Meta Theatre: downsampling; linear-space lighting and twilight masks;
+separation and intensity adjustment of city lights; terrain-normal shading;
+ocean highlights; cloud shadows; transparent cloud deck; atmospheric rim;
+UV-mapped sphere meshes and Blender, glTF and Unreal material authoring.
+
+Attribution must travel with redistributed source textures and derived Earth assets.

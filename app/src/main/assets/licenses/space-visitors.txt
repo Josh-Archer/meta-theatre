@@ -1,0 +1,6 @@
+ISS geometry adapted from NASA / Michael D. Carbajal, International Space Station (ISS) (B).
+Source: https://science.nasa.gov/3d-resources/international-space-station-iss-b/
+Usage guidance: https://www.nasa.gov/nasa-brand-center/images-and-media/
+Modified for this app: normalized to 109 m span; simplified, recolored, and textured.
+Roadster/Starman geometry authored for Meta Theatre. Display passes are staged and are not live orbital tracking.
+Lunar calculations adapted from SunCalc, BSD-2-Clause; see suncalc.txt.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MetaTheatre" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+    <style name="PanelTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF12161E</item>
+    </style>
+    <style name="PlayerPanelTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

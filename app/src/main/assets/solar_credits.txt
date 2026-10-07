@@ -1,0 +1,28 @@
+Meta Theatre solar environment
+
+Planet, Moon, Sun and Saturn ring maps: Solar System Scope / INOVE.
+https://www.solarsystemscope.com/textures/
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+Changes: resampling to 2048 x 1024; JPEG encoding; ring alpha reduced to a
+2048 x 1 radial profile. Lighting, scale, geometry, and arrangement are authored
+for this app. The source maps include artistic color treatment and filled gaps.
+
+Stars: Deep Star Maps 2020, Ernie Wright.
+NASA/Goddard Space Flight Center Scientific Visualization Studio.
+Gaia DR2: ESA/Gaia/DPAC.
+https://svs.gsfc.nasa.gov/4851/
+Uses the celestial-coordinate catalog map without constellation illustrations.
+Changes: fixed exposure/contrast curve and 4K sRGB runtime encoding.
+
+Planet mean radii: NASA/JPL Solar System Dynamics.
+https://ssd.jpl.nasa.gov/planets/phys_par.html
+Moon radius 1737.4 km, Sun radius 695700 km: NASA fact sheets.
+https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html
+https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html
+Saturn main C-through-A rings, 74500 to 136780 km from center:
+https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html
+
+All bodies share one mean-radius scale. Spacing is compressed and arranged for
+the theatre; positions are not current astronomical ephemerides. The moving Sun
+follows the headset's local civil-time cycle. Earth credits are in earth_credits.txt.

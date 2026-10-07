@@ -1,0 +1,30 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.cxx/
+*.apk
+*.aab
+.kotlin/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local credentials, device state, and tool installations.
+.env
+.env.*
+*.keystore
+*.jks
+*.pem
+*.key
+tools/blender-mcp-venv/
+tools/blender_mcp_official/
+
+# Keep review notes; raw logs, captures, APKs, and checkpoints stay local.
+art/validation/*
+!art/validation/*.md
+!art/validation/junior-tasks-validation.json
+*.blend1
+*.blend2

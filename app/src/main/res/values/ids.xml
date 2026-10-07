@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="screen_panel" type="id" />
+    <item name="library_panel" type="id" />
+    <item name="player_panel" type="id" />
+    <item name="subtitle_panel" type="id" />
+    <item name="library_view" type="id" />
+</resources>
