@@ -80,7 +80,7 @@ internal class ScreenGripSystem(
     var overlays: ScreenOverlays? = null
     private val autoHide = PlayerAutoHide()
     private val revealMotion = RailRevealMotion()
-    private val handGestures = MovieHandGestures()
+    private val handGestures = ScreenHandGestures()
     private val openGestures = OpenHandGestures()
     private data class ScreenMotion(val start: Pose, val end: Vector3, val started: Long)
     private var screenMotion: ScreenMotion? = null
@@ -327,16 +327,11 @@ internal class ScreenGripSystem(
             val aimed = aim(pose)
             if (aimed != null && (!watching || aimed.onFace) && (hovered == null || aimed.distance < hovered.distance)) hovered = aimed
             if (isHand) {
-                if (watching) {
-                    if (aimed?.onFace == true) handAims[id] = aimed
-                    val screenPose = screen.getComponent<Transform>().transform
-                    hands.add(HandInput(id, down, pose.t.dot(screenPose.right().times(-1f)),
-                        pose.t.dot(screenPose.up()), pose.t.dot(screenPose.forward()),
-                        onVideo = aimed?.onFace == true && railSelections[id] == null))
-                } else if (pressed && aimed?.onFace == true) {
-                    Log.i(TAG, "library hand press")
-                    onPress(aimed.xNorm, aimed.yNorm)
-                }
+                if (aimed?.onFace == true) handAims[id] = aimed
+                val screenPose = screen.getComponent<Transform>().transform
+                hands.add(HandInput(id, down, pose.t.dot(screenPose.right().times(-1f)),
+                    pose.t.dot(screenPose.up()), pose.t.dot(screenPose.forward()),
+                    onVideo = aimed?.onFace == true && railSelections[id] == null))
                 continue
             }
             val held = grab
@@ -368,35 +363,30 @@ internal class ScreenGripSystem(
             }
         }
         if (grab?.driver?.id !in ids) grab = null
-        if (watching && !screenHidden) {
-            val size = screenSize()
-            val actions = handGestures.update(hands, size, now)
-            if (actions.resizing != wasHandResizing) {
-                wasHandResizing = actions.resizing
-                if (!actions.resizing) saveScreenSize()
-                Log.i(TAG, "hand resize ${if (actions.resizing) "started" else "ended"} width=${size.width}")
-            }
-            actions.size?.let {
-                if (now - lastResizeMs >= 33 && abs(it.width - size.width) >= 0.01f) {
-                    lastResizeMs = now
-                    applySize(it)
-                    autoHide.interact(now)
-                    if (now - lastResizeLogMs >= 400L) {
-                        lastResizeLogMs = now
-                        Log.i(TAG, "hand resize applied width=${screenSize().width}")
-                    }
+        val size = screenSize()
+        val actions = handGestures.update(hands, size, now, watching, screenHidden, navigating)
+        if (actions.resizing != wasHandResizing) {
+            wasHandResizing = actions.resizing
+            if (!actions.resizing) saveScreenSize()
+            Log.i(TAG, "hand resize ${if (actions.resizing) "started" else "ended"} width=${size.width}")
+        }
+        actions.size?.let {
+            if (now - lastResizeMs >= 33 && abs(it.width - size.width) >= 0.01f) {
+                lastResizeMs = now
+                applySize(it)
+                autoHide.interact(now)
+                if (now - lastResizeLogMs >= 400L) {
+                    lastResizeLogMs = now
+                    Log.i(TAG, "hand resize applied width=${screenSize().width}")
                 }
             }
-            for (direction in actions.seekDirections) {
-                Log.i(TAG, "hand swipe seek $direction")
-                onSeek(direction * 10_000L)
-            }
-            for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
-        } else {
-            handGestures.reset()
-            wasHandResizing = false
-            if (libraryScroll != 0) onScroll(libraryScroll)
         }
+        for (direction in actions.seekDirections) {
+            Log.i(TAG, "hand swipe seek $direction")
+            onSeek(direction * 10_000L)
+        }
+        for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
+        if (!watching && !screenHidden && libraryScroll != 0) onScroll(libraryScroll)
         processOpenHands(inputs, now)
         placeCursor(if (screenHidden) null else hovered)
     }

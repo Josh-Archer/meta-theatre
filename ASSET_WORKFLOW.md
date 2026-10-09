@@ -7,6 +7,8 @@ The eight-planet environment, Moon, shared Sun, Saturn rings, catalog sky and
 runtime budgets are documented in [`art/SOLAR_SYSTEM.md`](art/SOLAR_SYSTEM.md).
 The rebuilt lounge chair, packed Blender source, Unreal LODs, runtime costs,
 and headset installation status are documented in [`art/CHAIR.md`](art/CHAIR.md).
+The original-generation Roadster with Starman, its standalone editable source,
+runtime cost and Unreal review are documented in [`art/ROADSTER.md`](art/ROADSTER.md).
 
 ## Current Meta Theatre app
 

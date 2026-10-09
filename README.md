@@ -87,10 +87,18 @@ its position and size. A movie pauses while hidden and resumes its previous
 playback intent when restored; an already paused movie stays paused. The gesture
 also hides the library. Hidden screens do not accept movie or library presses.
 
+To resize either the library or movie screen, aim both hands at its face, pinch
+with both index fingers and thumbs, then hold both pinches while moving your
+hands apart to enlarge it or together to shrink it. The first pinch can wait
+for the second. Release to keep the size. A quick single pinch selects on
+release; resizing consumes both pinches so it does not select a library item.
+
 The ISS and Roadster make frequent passes across the forward view, above the
 default movie screen. Their first passes start 3 and 12 seconds after scene
 creation; they repeat every 120 and 150 seconds. Quiet cinema pauses them while
 the movie is visible. Hiding the screen restores ambient lighting and flybys.
+The rebuilt original-generation Roadster and Starman source, renders and
+Blender/Unreal validation are documented in [art/ROADSTER.md](art/ROADSTER.md).
 
 The account token stays in the app's private storage on the headset. Sign out
 requires confirmation and clears it. App updates retain the token; if the token

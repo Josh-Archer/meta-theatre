@@ -36,7 +36,7 @@ internal class MovieHandGestures {
         stretch = null
     }
 
-    fun update(hands: List<HandInput>, size: ScreenSize, nowMs: Long): HandActions {
+    fun update(hands: List<HandInput>, size: ScreenSize, nowMs: Long, allowSeek: Boolean = true): HandActions {
         val tracked = hands.associateBy { it.id }
         val seeks = mutableListOf<Int>()
         val taps = mutableListOf<Long>()
@@ -69,7 +69,9 @@ internal class MovieHandGestures {
                 val a = candidates[0]
                 val b = candidates[1]
                 val separation = distance(tracked.getValue(a.key), tracked.getValue(b.key))
-                if (abs(a.value.startedMs - b.value.startedMs) <= JOIN_MS && separation >= MIN_SPAN) {
+                // A held pinch can wait for the other hand. Requiring both edges within
+                // 500 ms made a deliberate pinch-then-pinch silently fail to resize.
+                if (separation >= MIN_SPAN) {
                     stretch = Stretch(a.key, b.key, separation, size)
                     a.value.consumed = true
                     b.value.consumed = true
@@ -82,7 +84,7 @@ internal class MovieHandGestures {
         }
         for ((id, pinch) in pinches) {
             val hand = tracked.getValue(id)
-            if (pinch.consumed || !hand.pinching) continue
+            if (!allowSeek || pinch.consumed || !hand.pinching) continue
             val dx = hand.x - pinch.start.x
             val dy = hand.y - pinch.start.y
             val dz = hand.z - pinch.start.z
@@ -100,9 +102,23 @@ internal class MovieHandGestures {
     companion object {
         const val SWIPE_METERS = 0.12f
         const val MIN_SPAN = 0.08f
-        const val JOIN_MS = 500L
         const val TAP_MS = 500L
         const val TAP_TRAVEL = 0.06f
+    }
+}
+
+/** Shared routing for the library and movie; hidden screens and navigation own no screen input. */
+internal class ScreenHandGestures {
+    private val gestures = MovieHandGestures()
+    private var movie: Boolean? = null
+
+    fun reset() { gestures.reset(); movie = null }
+
+    fun update(hands: List<HandInput>, size: ScreenSize, nowMs: Long, watching: Boolean,
+               hidden: Boolean = false, navigating: Boolean = false): HandActions {
+        if (hidden || navigating) { reset(); return HandActions() }
+        if (movie != watching) { gestures.reset(); movie = watching }
+        return gestures.update(hands, size, nowMs, allowSeek = watching)
     }
 }
 
