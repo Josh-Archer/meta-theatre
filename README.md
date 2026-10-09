@@ -44,7 +44,10 @@ with your fingers curled and your thumb beside your index finger:
 This moves you around the Earth-orbit scene. Other environments are not yet
 available. Teleports require a pad; steps do not have floor or wall collision
 in this open-space scene. Hand movie/panel gestures pause during movement mode;
-open your hand before using them again. Controller sticks still browse and seek.
+open your hand before using them again. Controller sticks browse and seek while
+pointing at a panel; point away from it and flick the stick left or right to turn
+your perspective by 45 degrees. The library footer also has **Turn left** and
+**Turn right** buttons. These turn your view from the chair.
 
 The implementation uses Spatial SDK 0.14's `HandMicrogestureLocomotionSystem`.
 See [hand locomotion validation](art/validation/HAND_LOCOMOTION.md) for verification
@@ -81,9 +84,12 @@ is open, it dims the cabin lighting and hides and pauses flybys. Closing the
 movie restores normal lighting and resumes the flyby clock. The setting is
 saved on the headset.
 
-Bring two open palms together while aiming at the screen to hide it. Spread
-both palms apart to restore it, or press a controller trigger. The screen keeps
-its position and size. A movie pauses while hidden and resumes its previous
+Hold two open palms facing each other in front of the screen, about 40–50 cm
+apart. Move both inward to about 20 cm apart to fold the screen closed. You do
+not need to make contact or aim both hand rays at it. Start with palms close
+together and spread both apart to unfold it, or press a controller trigger.
+The screen keeps its size and reappears in front of your current view, including
+after turning while it was hidden. A movie pauses while hidden and resumes its previous
 playback intent when restored; an already paused movie stays paused. The gesture
 also hides the library. Hidden screens do not accept movie or library presses.
 
@@ -100,6 +106,14 @@ the movie is visible. Hiding the screen restores ambient lighting and flybys.
 The modern Roadster has an open roof and visible Starman occupant. Its source, renders and
 Blender/Unreal validation are documented in [art/ROADSTER.md](art/ROADSTER.md).
 
+Point at either visitor until the gold pointer appears, hold an index/thumb
+pinch or controller trigger, then pull your hand back at least 6 cm. The model
+moves closer as a miniature for inspection. Keep holding to move it and rotate
+your wrist to turn it; release to leave it there. Choose **Return models** in
+the library footer to resume both flybys. Models behind a visible screen do not
+capture its presses. Quiet cinema hides inspected models along with flybys and
+shows them again when the movie is closed or hidden.
+
 The account token stays in the app's private storage on the headset. Sign out
 requires confirmation and clears it. App updates retain the token; if the token
 is already missing, use Link Plex again.
@@ -112,7 +126,9 @@ JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./gradlew testDebugUnitTest assembl
 
 The local integration tests use Robolectric, Compose, and mock Plex HTTP servers
 to cover pagination, canceled navigation, search, playback intent, track
-selection, subtitle rendering, and quiet-mode settings. These checks do not
+selection, subtitle rendering, quiet-mode settings, scene-control hit regions,
+visitor capture/pull/rotation/release, and native-palm screen folding after a
+turn or recenter. These checks do not
 replace playback and hand/controller testing on an awake Quest.
 
 ## 3D assets

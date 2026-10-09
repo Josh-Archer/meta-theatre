@@ -42,6 +42,36 @@ class LibraryPanelIntegrationTest {
     @Before fun immediateModelWork() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
     @After fun release() { model?.release(); Dispatchers.resetMain() }
 
+    @Test fun renderedSceneControlsMatchQuestRayCoordinatesWithoutLinkingPlex() {
+        val player = mock(ScreenPlayer::class.java)
+        `when`(player.transport).thenReturn(MutableStateFlow(Transport()))
+        val currentModel = TheatreModel(RuntimeEnvironment.getApplication(), player,
+            mock(PlexClient::class.java), Dispatchers.Unconfined)
+        model = currentModel
+        val turns = mutableListOf<Float>()
+        var returns = 0
+        currentModel.onViewTurn = { turns.add(it) }
+        currentModel.onVisitorsReturn = { returns++ }
+        compose.setContent {
+            Box(Modifier.requiredSize(1600.dp, 900.dp)) { LibraryPanel(currentModel, player) }
+        }
+        for (control in SceneControl.entries) {
+            val bounds = compose.onNodeWithText(control.label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle {
+                assertTrue(currentModel.sceneControlPress(bounds.center.x / root.width, bounds.center.y / root.height))
+            }
+        }
+        compose.runOnIdle {
+            assertEquals(listOf(-45f, 45f), turns)
+            assertEquals(1, returns)
+            assertEquals(Browse.SignedOut, currentModel.browse.value)
+            assertFalse(currentModel.sceneControlPress(.1f, .96f)) // Previous remains shelf navigation
+            assertFalse(currentModel.sceneControlPress(.9f, .96f)) // Next remains shelf navigation
+            assertFalse(currentModel.sceneControlPress(.52f, .5f)) // poster area cannot turn the view
+        }
+    }
+
     @Test fun renderedKeyboardKeysMatchQuestRayCoordinatesAndFilterTheShelf() {
         val context = RuntimeEnvironment.getApplication()
         val player = mock(ScreenPlayer::class.java)

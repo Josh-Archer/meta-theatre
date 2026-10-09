@@ -116,7 +116,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
                     LibrarySearchKeyboard(model)
                 }
             }
-            ShelfFooter(browse, tiles.size, window)
+            ShelfFooter(tiles.size, window, model)
         }
     }
 }
@@ -405,15 +405,8 @@ private fun PosterArt(url: String, modifier: Modifier) {
 }
 
 @Composable
-private fun ShelfFooter(browse: Browse, total: Int, window: ShelfWindow) {
+private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
     val maxStart = PosterGrid.maxStart(total)
-    val label = when {
-        browse is Browse.SignedOut -> "Point and pinch, or use the trigger"
-        browse is Browse.Linking -> "Cancel is the top right"
-        total <= 0 -> ""
-        total <= PosterGrid.COLUMNS -> "Point and pinch, or use the trigger"
-        else -> "${window.start + 1}–${window.start + window.shown} of $total"
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -424,11 +417,11 @@ private fun ShelfFooter(browse: Browse, total: Int, window: ShelfWindow) {
             label = if (window.start > 0) "Previous" else "",
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.PREV_X),
         ) {}
-        Box(
-            modifier = Modifier.weight(PosterGrid.NEXT_X - PosterGrid.PREV_X),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(label, color = Muted, fontSize = 18.sp, maxLines = 1)
+        SceneControl.entries.forEachIndexed { index, control ->
+            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index])) {
+                val x = when (control) { SceneControl.TURN_LEFT -> .36f; SceneControl.TURN_RIGHT -> .52f; SceneControl.RETURN_MODELS -> .66f }
+                model.sceneControlPress(x, .96f)
+            }
         }
         ZoneButton(
             label = if (window.start < maxStart) "Next" else "",

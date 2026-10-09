@@ -69,6 +69,8 @@ class TheatreModel(
     /** True puts the movie in front of the shelf. False brings the shelf back. */
     var onWatching: ((Boolean) -> Unit)? = null
 
+    var onViewTurn: ((Float) -> Unit)? = null
+    var onVisitorsReturn: (() -> Unit)? = null
     var onScreenResize: ((Float) -> Unit)? = null
     var onQuietCinemaPreference: ((Boolean) -> Unit)? = null
     val quietCinemaEnabled = MutableStateFlow(state.quietCinemaEnabled)
@@ -103,6 +105,8 @@ class TheatreModel(
         scope.cancel()
         onPrepareScreen = null
         onWatching = null
+        onViewTurn = null
+        onVisitorsReturn = null
         onScreenResize = null
         onQuietCinemaPreference = null
         onPlayerInteraction = null
@@ -256,6 +260,15 @@ class TheatreModel(
     }
 
     fun openLibrary() = closeToHome()
+
+    fun sceneControlPress(x: Float, y: Float): Boolean {
+        when (SceneControls.at(x, y) ?: return false) {
+            SceneControl.TURN_LEFT -> onViewTurn?.invoke(-SceneControls.TURN_DEGREES)
+            SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
+            SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
+        }
+        return true
+    }
 
     fun setScreenHidden(hidden: Boolean) {
         if (screenHidden.value == hidden) return

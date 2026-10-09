@@ -68,7 +68,16 @@ class OpenHandGesturesTest {
         g.update(pair(0.3f).take(1), true, false, 100)
         assertFalse(g.update(pair(0.1f), true, false, 200).close)
         g.reset(); g.update(pair(0.5f), true, false, 0)
-        assertFalse(g.update(pair(0.1f), true, false, 1100).close)
+        assertFalse(g.update(pair(0.1f), true, false, 1600).close)
+    }
+
+    @Test fun naturalOneSecondClosureAndRelaxedThumbRemainRecognizable() {
+        val gestures = OpenHandGestures()
+        gestures.update(pair(.5f), true, false, 0)
+        assertTrue(gestures.update(pair(.20f), true, false, 1100).close)
+        val relaxed = joints()
+        relaxed[5] = relaxed[3] // thumb relaxed alongside the palm; four fingers remain extended
+        assertNotNull(OpenHandPose.read(0, relaxed))
     }
 
     @Test fun closingThenSpreadingRestoresHiddenScreenWithoutAnInvisibleRayTarget() {
@@ -89,7 +98,7 @@ class OpenHandGesturesTest {
         g.update(emptyList(), true, false, 100, true)
         assertFalse(g.update(pair(0.5f), true, false, 200, true).restore)
         g.reset(); g.update(pair(0.12f), true, false, 0, true)
-        assertFalse(g.update(pair(0.5f), true, false, 1100, true).restore)
+        assertFalse(g.update(pair(0.5f), true, false, 1600, true).restore)
         g.reset(); g.update(pair(0.12f), true, false, 0, true)
         val oneHand = listOf(pair(0.12f)[0], hand(1, x = 0.5f, normal = HandPoint(-1f, 0f, 0f)))
         assertFalse(g.update(oneHand, true, false, 200, true).restore)
@@ -97,7 +106,7 @@ class OpenHandGesturesTest {
 
     @Test fun hidingMustStartAtTheScreenAndPinchingBlocksRestoring() {
         val g = OpenHandGestures()
-        g.update(pair(0.5f).map { it.copy(aimingAtScreen = false) }, true, false, 0)
+        g.update(pair(0.5f).map { it.copy(aimingAtScreen = false, inFrontOfScreen = false) }, true, false, 0)
         assertFalse(g.update(pair(0.12f), true, false, 200).close)
         g.update(pair(0.12f), true, true, 500, true)
         g.update(pair(0.12f), true, false, 600, true)

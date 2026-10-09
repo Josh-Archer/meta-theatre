@@ -104,6 +104,8 @@ class TheatreActivity : AppSystemActivity() {
             applyWatching(!model.libraryOpen.value)
         }
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
+        model.onViewTurn = ::turnView
+        model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
         model.start()
@@ -198,6 +200,9 @@ class TheatreActivity : AppSystemActivity() {
                 readOpenHands = { nativeHands?.read().orEmpty() },
                 onScreenHiddenChange = { hidden -> scope.launch { model.setScreenHidden(hidden) } },
                 handsNavigating = { handLocomotion?.areHandsInUse() == true },
+                viewerPose = { scene.getViewerPose() },
+                visitors = spaceVisitorRenderer,
+                onViewTurn = ::turnView,
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
             )
             grip = system
@@ -300,7 +305,10 @@ class TheatreActivity : AppSystemActivity() {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
         handLocomotion?.enableHandLocomotion(immersiveFocused)
-        if (!immersiveFocused) locomotionTargets?.show(false)
+        if (!immersiveFocused) {
+            locomotionTargets?.show(false)
+            spaceVisitorRenderer?.cancelGrab()
+        }
         // Resample civil time immediately after focus/visibility changes, including headset wake.
         updateSolarEnvironment(force = true)
         when (state) {
@@ -312,6 +320,7 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onPause() {
         immersiveFocused = false
+        spaceVisitorRenderer?.cancelGrab()
         handLocomotion?.enableHandLocomotion(false)
         locomotionTargets?.show(false)
         model.saveCheckpoint()
@@ -476,8 +485,14 @@ class TheatreActivity : AppSystemActivity() {
         )
     }
 
+    private fun turnView(degrees: Float) {
+        if (!immersiveFocused) return
+        spaceVisitorRenderer?.cancelGrab()
+        scene.updateViewOrigin(0f, degrees)
+    }
+
     private fun onScreenPress(xNorm: Float, yNorm: Float) {
-        if (model.screenHidden.value) return
+        if (model.screenHidden.value || grip?.interactive == false) return
         val x = xNorm.coerceIn(0f, 1f)
         val y = yNorm.coerceIn(0f, 1f)
         if (model.signOutConfirmationPress(x, y)) return
@@ -486,6 +501,7 @@ class TheatreActivity : AppSystemActivity() {
             onMoviePress()
             return
         }
+        if (model.sceneControlPress(x, y)) return
         if (model.librarySearchPress(x, y)) return
         val browse = model.browse.value
         if (browse is Browse.SignedOut) {

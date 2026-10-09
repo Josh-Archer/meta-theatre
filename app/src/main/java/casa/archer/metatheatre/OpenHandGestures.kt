@@ -17,7 +17,7 @@ internal data class HandPoint(val x: Float, val y: Float, val z: Float) {
 internal data class HandJoint(val point: HandPoint, val flags: Int)
 internal data class OpenPalm(val side: Int, val position: HandPoint, val normal: HandPoint)
 
-/** Full finger extension is required; an unpressed pinch alone does not mean an open hand. */
+/** Extended fingers with a relaxed thumb are open; an unpressed pinch alone is insufficient. */
 internal object OpenHandPose {
     fun read(side: Int, joints: List<HandJoint>): OpenPalm? {
         if (joints.size != 26 || joints.any { it.flags and 2 == 0 || !it.point.finite() } || joints[0].flags and 8 == 0) return null
@@ -25,13 +25,11 @@ internal object OpenHandPose {
             val chain = (start..start + 3).map { joints[it].point }
             val segments = chain.zipWithNext { a, b -> b - a }
             val length = segments.sumOf { it.length().toDouble() }.toFloat()
-            if (length < 0.025f || (chain.last() - chain.first()).length() / length < 0.88f ||
-                segments.zipWithNext().any { (a, b) -> a.unit().dot(b.unit()) < 0.65f }) return null
+            if (length < 0.025f || (chain.last() - chain.first()).length() / length < 0.82f ||
+                segments.zipWithNext().any { (a, b) -> a.unit().dot(b.unit()) < 0.40f }) return null
         }
-        // A folded thumb or a thumb/index pinch is excluded as well.
-        val thumb = (joints[5].point - joints[3].point).length()
-        val thumbPath = (joints[4].point - joints[3].point).length() + (joints[5].point - joints[4].point).length()
-        if (thumbPath < 0.02f || thumb / thumbPath < 0.8f || (joints[5].point - joints[10].point).length() < 0.035f) return null
+        // A relaxed thumb is normal for a clap. A thumb/index pinch is still excluded.
+        if ((joints[5].point - joints[10].point).length() < 0.025f) return null
         val wrist = joints[1].point
         val normal = (joints[6].point - wrist).cross(joints[21].point - wrist).unit() * if (side == 0) 1f else -1f
         if (normal.length() < 0.9f) return null
@@ -39,7 +37,8 @@ internal object OpenHandPose {
     }
 }
 
-internal data class OpenHandInput(val id: Int, val position: HandPoint, val normal: HandPoint, val aimingAtScreen: Boolean)
+internal data class OpenHandInput(val id: Int, val position: HandPoint, val normal: HandPoint, val aimingAtScreen: Boolean,
+                                  val inFrontOfScreen: Boolean = aimingAtScreen)
 internal enum class ScreenDirection { LEFT, RIGHT, UP, DOWN }
 internal data class OpenHandActions(val move: ScreenDirection? = null, val close: Boolean = false, val restore: Boolean = false)
 
@@ -71,17 +70,17 @@ internal class OpenHandGestures {
             val separation = (b.position - a.position).length()
             val facing = facing(a, b)
             // No ray target is required to restore an invisible screen.
-            if (spread == null && separation <= 0.20f && facing) spread = Clap(a, b, now)
+            if (spread == null && separation <= 0.26f && facing) spread = Clap(a, b, now)
             val start = spread ?: return OpenHandActions()
             val outward = (start.b.position - start.a.position).unit()
             val aTravel = (a.position - start.a.position).dot(outward * -1f)
             val bTravel = (b.position - start.b.position).dot(outward)
             val elapsed = now - start.started
-            if (elapsed in 80L..900L && separation >= 0.40f && aTravel >= 0.08f && bTravel >= 0.08f && facing) {
+            if (elapsed in 80L..1400L && separation >= 0.40f && aTravel >= 0.08f && bTravel >= 0.08f && facing) {
                 spread = null; blockedUntil = now + 1200L
                 return OpenHandActions(restore = true)
             }
-            if (elapsed > 900L || !facing || separation < 0.03f) spread = null
+            if (elapsed > 1400L || !facing || separation < 0.03f) spread = null
             return OpenHandActions()
         }
         spread = null
@@ -93,7 +92,7 @@ internal class OpenHandGestures {
             val separation = (b.position - a.position).length()
             if (separation >= 0.30f) clapLatched = false
             val facing = facing(a, b)
-            if (clap == null && !clapLatched && separation >= 0.30f && facing && a.aimingAtScreen && b.aimingAtScreen) {
+            if (clap == null && !clapLatched && separation >= 0.30f && facing && a.inFrontOfScreen && b.inFrontOfScreen) {
                 clap = Clap(a, b, now)
             }
             val start = clap
@@ -103,14 +102,14 @@ internal class OpenHandGestures {
                 val aTravel = (a.position - start.a.position).dot(inward)
                 val bTravel = (b.position - start.b.position).dot(inward * -1f)
                 val elapsed = now - start.started
-                if (elapsed in 80L..900L && separation <= 0.14f && aTravel >= 0.065f && bTravel >= 0.065f &&
-                    (initial - separation) / (elapsed / 1000f) >= 0.25f && facing) {
+                if (elapsed in 80L..1400L && separation <= 0.22f && aTravel >= 0.065f && bTravel >= 0.065f &&
+                    (initial - separation) / (elapsed / 1000f) >= 0.15f && facing) {
                     strokes.clear(); clap = null; clapLatched = true; blockedUntil = now + 1200L
                     return OpenHandActions(close = true)
                 }
-                if (elapsed > 900L || !facing || initial - separation < -0.08f) clap = null
-                // Suppress individual strokes only while both palms are actually moving inward.
-                if (aTravel > 0.025f && bTravel > 0.025f) { strokes.clear(); return OpenHandActions() }
+                if (elapsed > 1400L || !facing || initial - separation < -0.08f) clap = null
+                // An armed two-hand motion owns the stroke, including its initial hesitation.
+                strokes.clear(); return OpenHandActions()
             }
         } else clap = null
         var move: ScreenDirection? = null
