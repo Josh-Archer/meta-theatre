@@ -46,8 +46,8 @@ available. Teleports require a pad; steps do not have floor or wall collision
 in this open-space scene. Hand movie/panel gestures pause during movement mode;
 open your hand before using them again. Controller sticks browse and seek while
 pointing at a panel; point away from it and flick the stick left or right to turn
-your perspective by 45 degrees. The library footer also has **Turn left** and
-**Turn right** buttons. These turn your view from the chair.
+your perspective by 45 degrees. Open the library to use the **Turn left** and
+**Turn right** buttons along its bottom edge. These turn your view from the chair.
 
 The implementation uses Spatial SDK 0.14's `HandMicrogestureLocomotionSystem`.
 See [hand locomotion validation](art/validation/HAND_LOCOMOTION.md) for verification
@@ -109,10 +109,15 @@ Blender/Unreal validation are documented in [art/ROADSTER.md](art/ROADSTER.md).
 Point at either visitor until the gold pointer appears, hold an index/thumb
 pinch or controller trigger, then pull your hand back at least 6 cm. The model
 moves closer as a miniature for inspection. Keep holding to move it and rotate
-your wrist to turn it; release to leave it there. Choose **Return models** in
-the library footer to resume both flybys. Models behind a visible screen do not
+your wrist to turn it. Release slowly to leave it there. To send it back, give
+your held hand/controller a quick outward push and release the pinch/trigger
+while moving. The model flies back into its normal pass over 1.2 seconds. A
+roughly 10–20 cm outward motion is enough; no hard throw is needed. The library's
+**Return models** button sends both back with the same animation. Returning
+after a pass ends starts another visible pass immediately. Models behind a visible screen do not
 capture its presses. Quiet cinema hides inspected models along with flybys and
-shows them again when the movie is closed or hidden.
+shows them again when the movie is closed or hidden. See
+[visitor return validation](art/validation/VISITOR_RETURN.md) for throw checks.
 
 The account token stays in the app's private storage on the headset. Sign out
 requires confirmation and clears it. App updates retain the token; if the token

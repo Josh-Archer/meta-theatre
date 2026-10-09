@@ -7,12 +7,38 @@ import kotlin.math.sqrt
 internal data class VisitorTarget(val asset: String, val pose: Pose, val scale: Float, val radius: Float)
 internal data class VisitorPointer(val id: Long, val pose: Pose, val down: Boolean, val maxDistance: Float = Float.POSITIVE_INFINITY)
 internal data class VisitorHit(val asset: String, val point: Vector3, val normal: Vector3, val distance: Float)
-internal data class VisitorInputResult(val owned: Set<Long> = emptySet(), val hover: VisitorHit? = null)
+internal data class VisitorToss(val target: VisitorTarget, val velocity: Vector3)
+internal data class VisitorInputResult(val owned: Set<Long> = emptySet(), val hover: VisitorHit? = null,
+                                      val returned: List<VisitorToss> = emptyList())
 
 /** Shared by the live renderer and replay tests. A held pinch/trigger owns the whole pull. */
 internal class VisitorInspection {
     private data class Grab(val driver: Long, val target: VisitorTarget, val hand: Pose,
-        var pulledAt: Long? = null, var pullHand: Pose? = null, var near: Vector3? = null, var destination: VisitorTarget? = null)
+        var pulledAt: Long? = null, var pullHand: Pose? = null, var near: Vector3? = null, var destination: VisitorTarget? = null,
+        val motion: ThrowMotion = ThrowMotion())
+    private class ThrowMotion {
+        private data class Sample(val time: Long, val relative: Vector3)
+        private val samples = mutableListOf<Sample>()
+        fun record(now: Long, hand: Vector3, eye: Vector3) {
+            val relative = hand - eye
+            samples.lastOrNull()?.let {
+                if (now <= it.time) return
+                if (now - it.time > 100L || (relative - it.relative).length() > .5f) samples.clear()
+            }
+            samples.removeAll { now - it.time > 160L }
+            samples.add(Sample(now, relative))
+        }
+        fun outwardVelocity(): Vector3? {
+            if (samples.size < 2) return null
+            val first = samples.first(); val last = samples.last()
+            if (last.time - first.time < 40L) return null
+            val delta = last.relative - first.relative
+            val seconds = (last.time - first.time) / 1000f
+            val speed = delta.length() / seconds
+            if (delta.length() < .09f || speed < .6f || last.relative.length() - first.relative.length() < .05f) return null
+            return delta.normalize() * speed.coerceAtMost(3f)
+        }
+    }
     private val previous = mutableMapOf<Long, Boolean>()
     private val parked = mutableMapOf<String, VisitorTarget>()
     private var grab: Grab? = null
@@ -27,14 +53,24 @@ internal class VisitorInspection {
     fun update(pointers: List<VisitorPointer>, targets: List<VisitorTarget>, viewer: Pose, now: Long,
                blocked: Boolean = false): VisitorInputResult {
         val owned = mutableSetOf<Long>()
+        val returned = mutableListOf<VisitorToss>()
         val tracked = pointers.associateBy { it.id }
         val held = grab
         if (held != null) {
             owned.add(held.driver)
             val hand = tracked[held.driver]
+            if (!blocked && hand != null && valid(hand.pose) && held.pulledAt != null)
+                held.motion.record(now, hand.pose.t, viewer.t)
             if (blocked || hand == null || !hand.down || !valid(hand.pose)) {
                 if (held.pulledAt == null) parked.remove(held.target.asset)
-                if (held.pulledAt != null) held.destination?.let { parked[held.target.asset] = it }
+                if (held.pulledAt != null) held.destination?.let { end ->
+                    val velocity = if (!blocked && hand != null && !hand.down && valid(hand.pose) && now - held.pulledAt!! >= 260L)
+                        held.motion.outwardVelocity() else null
+                    if (velocity != null) {
+                        parked.remove(held.target.asset)
+                        returned.add(VisitorToss(end, velocity))
+                    } else parked[held.target.asset] = end
+                }
                 grab = null
             } else {
                 if (held.pulledAt == null &&
@@ -42,6 +78,7 @@ internal class VisitorInspection {
                     held.pulledAt = now
                     held.pullHand = copy(hand.pose)
                     held.near = viewer.t + (held.target.pose.t - viewer.t).normalize() * 1.5f
+                    held.motion.record(now, hand.pose.t, viewer.t)
                 }
                 held.pulledAt?.let { started ->
                     val pullHand = held.pullHand!!
@@ -59,14 +96,18 @@ internal class VisitorInspection {
         var hover: VisitorHit? = null
         if (!blocked) for (pointer in pointers) {
             if (!valid(pointer.pose)) continue
-            val hit = targets.mapNotNull { intersect(pointer, parked[it.asset] ?: it) }.minByOrNull { it.distance }
+            val hit = targets.filterNot { target -> returned.any { it.target.asset == target.asset } }
+                .mapNotNull { intersect(pointer, parked[it.asset] ?: it) }.minByOrNull { it.distance }
             if (hit != null && (hover == null || hit.distance < hover.distance)) hover = hit
             if (grab == null && previous[pointer.id] == false && pointer.down && hit != null) {
                 val target = parked[hit.asset] ?: targets.first { it.asset == hit.asset }
                 // Close models start manipulating immediately; distant models wait for a deliberate pull.
                 val inspected = hit.asset in parked
                 val captured = Grab(pointer.id, target.copy(pose = copy(target.pose)), copy(pointer.pose))
-                if (inspected) { captured.pulledAt = now - 260L; captured.pullHand = copy(pointer.pose); captured.near = target.pose.t.copy() }
+                if (inspected) {
+                    captured.pulledAt = now - 260L; captured.pullHand = copy(pointer.pose); captured.near = target.pose.t.copy()
+                    captured.motion.record(now, pointer.pose.t, viewer.t)
+                }
                 grab = captured
                 parked[hit.asset] = target.copy(pose = copy(target.pose))
                 owned.add(pointer.id)
@@ -74,7 +115,7 @@ internal class VisitorInspection {
         }
         pointers.forEach { previous[it.id] = it.down }
         previous.keys.retainAll(tracked.keys)
-        return VisitorInputResult(owned, hover)
+        return VisitorInputResult(owned, hover, returned)
     }
 
     private fun intersect(pointer: VisitorPointer, target: VisitorTarget): VisitorHit? {

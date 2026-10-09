@@ -11,9 +11,10 @@ import com.meta.spatial.toolkit.Scale
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.Visible
 
-/** Embedded PBR GLBs inherit SolarRenderer's shared Sun. No collisions or per-frame allocations off-pass. */
+/** Embedded PBR GLBs inherit SolarRenderer's shared Sun; pointer targeting avoids mesh collisions. */
 internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elapsedRealtime) {
-    private data class Entry(val visitor: SpaceVisitors.Visitor, val entity: Entity, var visible: Boolean = false)
+    private data class Entry(val visitor: SpaceVisitors.Visitor, val entity: Entity, var visible: Boolean = false,
+                             var phaseOffset: Double = 0.0, var returning: VisitorReturnFlight? = null)
     private val entries = mutableListOf<Entry>()
     private val inspection = VisitorInspection()
     private val elapsedClock = PausableElapsedClock(clockMillis)
@@ -33,17 +34,26 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
 
     fun update() {
         if (elapsedClock.isPaused) return
-        val elapsed = elapsedClock.elapsedSeconds()
+        val now = elapsedClock.elapsedMillis()
+        val elapsed = now / 1000.0
         for (entry in entries) {
-            val p = SpaceVisitors.progress(entry.visitor, elapsed)
+            val p = SpaceVisitors.progress(entry.visitor, elapsed - entry.phaseOffset)
             val inspected = inspection.overrides[entry.visitor.asset]
-            val show = p != null || inspected != null
+            val flight = entry.returning
+            val show = p != null || inspected != null || flight != null
             if (show != entry.visible) {
                 entry.entity.setComponent(Visible(show))
                 entry.visible = show
                 android.util.Log.i("TheatreVisitors", "flyby ${entry.visitor.asset} visible=$show")
             }
-            if (inspected != null) {
+            if (flight != null) {
+                val orbit = VisitorTarget(entry.visitor.asset, SpaceVisitors.pose(entry.visitor, p ?: .5),
+                    entry.visitor.displayScale, radius(entry.visitor))
+                val frame = flight.frame(orbit, now)
+                entry.entity.setComponent(Transform(frame.pose))
+                entry.entity.setComponent(Scale(Vector3(frame.scale, frame.scale, frame.scale)))
+                if (flight.finished(now)) entry.returning = null
+            } else if (inspected != null) {
                 entry.entity.setComponent(Transform(inspected.pose))
                 entry.entity.setComponent(Scale(Vector3(inspected.scale, inspected.scale, inspected.scale)))
             } else if (p != null) {
@@ -68,14 +78,29 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
     }
 
     fun interact(pointers: List<VisitorPointer>, viewer: Pose, now: Long, blocked: Boolean): VisitorInputResult {
-        val targets = entries.filter { it.visible }.map { entry ->
+        val targets = entries.filter { it.visible && it.returning == null }.map { entry ->
             VisitorTarget(entry.visitor.asset, entry.entity.getComponent<Transform>().transform,
-                entry.entity.getComponent<Scale>().scale.x, if (entry.visitor == SpaceVisitors.iss) 70f else 2.65f)
+                entry.entity.getComponent<Scale>().scale.x, radius(entry.visitor))
         }
-        return inspection.update(pointers, targets, viewer, now, blocked || elapsedClock.isPaused)
+        val result = inspection.update(pointers, targets, viewer, now, blocked || elapsedClock.isPaused)
+        result.returned.forEach { startReturn(it.target, it.velocity) }
+        return result
     }
 
-    fun returnModels() { inspection.reset(); update() }
+    private fun radius(visitor: SpaceVisitors.Visitor) = if (visitor == SpaceVisitors.iss) 70f else 2.65f
+    private fun startReturn(target: VisitorTarget, velocity: Vector3) {
+        val entry = entries.firstOrNull { it.visitor.asset == target.asset } ?: return
+        val now = elapsedClock.elapsedMillis()
+        val elapsed = now / 1000.0
+        entry.phaseOffset = SpaceVisitors.returnOffset(entry.visitor, elapsed, entry.phaseOffset)
+        entry.returning = VisitorReturnFlight(target, velocity, now)
+    }
+    fun returnModels() {
+        val models = inspection.overrides.values.toList()
+        inspection.reset()
+        models.forEach { startReturn(it, Vector3(0f, 0f, 0f)) }
+        update()
+    }
     fun cancelGrab() { inspection.cancelGrab() }
     fun release() { inspection.reset(); entries.clear() }
 }

@@ -20,6 +20,13 @@ object SpaceVisitors {
         return if (age < visitor.durationSeconds) age / visitor.durationSeconds else null
     }
 
+    /** A returned model should visibly resume flying even if its original pass has ended. */
+    internal fun returnOffset(visitor: Visitor, elapsedSeconds: Double, offset: Double): Double {
+        val current = progress(visitor, elapsedSeconds - offset)
+        return if (current == null || current > .75) elapsedSeconds - visitor.firstPassSeconds - visitor.durationSeconds * .5
+            else offset
+    }
+
     fun pose(visitor: Visitor, progress: Double): Pose {
         val p = progress.coerceIn(0.0, 1.0)
         // Keep the entire pass in front of the seat and within a comfortable upward glance.
