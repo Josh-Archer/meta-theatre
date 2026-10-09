@@ -3,7 +3,8 @@ Source: https://science.nasa.gov/3d-resources/international-space-station-iss-b/
 Usage guidance: https://www.nasa.gov/nasa-brand-center/images-and-media/
 Modified for this app: normalized to 109 m span; simplified, recolored, and textured.
 Roadster/Starman geometry and carbon weave authored for Meta Theatre.
-Proportion reference: https://service.tesla.com/docs/Public/Roadster/ServiceManual/en-us/GUID-4E037ADB-D0F4-48A0-9261-1083193D4C1B.html
-Appearance reference: https://www.youtube.com/watch?v=A0FZIwabctw
+Modern Roadster appearance and estimated proportions: user-supplied reference photograph.
+Reference photograph is not bundled or published.
+Prior first-generation Roadster source preserved separately.
 Display passes are staged and are not live orbital tracking.
 Lunar calculations adapted from SunCalc, BSD-2-Clause; see suncalc.txt.

@@ -8,7 +8,7 @@ replacement=b'//'+b'./'*((len(old)-7)//2)+b'../..'
 replacement+=b'/'*(len(old)-len(replacement))
 neutral=b'/tmp/'+b'/'*(len(home)-5)
 assert len(old)==len(replacement) and len(home)==len(neutral)
-backup=ROOT/'art/validation/roadster-v2/private-metadata-backup';backup.mkdir(parents=True,exist_ok=True)
+backup=ROOT/'art/validation/roadster-v3/private-metadata-backup';backup.mkdir(parents=True,exist_ok=True)
 source=ROOT/'art/blender/space_roadster.blend';shutil.copy2(source,backup/source.name)
 with tempfile.TemporaryDirectory(prefix='theatre-roadster-') as tmp:
     raw=Path(tmp)/'source.raw'
@@ -37,8 +37,14 @@ with tempfile.TemporaryDirectory(prefix='theatre-roadster-') as tmp:
             if kind==ord('S'):value=value.replace(old,b'../../..').replace(home,b'~')
             getattr(result,methods[kind])(value)
         result.elems=[copy(e) for e in item.elems];return result
-    cleaned=copy(tree);out=Path(tmp)/'safe.fbx';encode_bin._write_timedate_hack=lambda root:None
-    encode_bin.write(str(out),cleaned,version);actual,_=parse_fbx.parse(str(out))
+    cleaned=copy(tree);out=Path(tmp)/'safe.fbx'
+    original_hack=encode_bin._write_timedate_hack
+    try:
+        encode_bin._write_timedate_hack=lambda root:None
+        encode_bin.write(str(out),cleaned,version)
+    finally:
+        encode_bin._write_timedate_hack=original_hack
+    actual,_=parse_fbx.parse(str(out))
     def compare(a,b):
         assert a.id==b.id and a.props_type==b.props_type and len(a.elems)==len(b.elems)
         for kind,v,w in zip(a.props_type,a.props,b.props):

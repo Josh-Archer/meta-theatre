@@ -28,3 +28,6 @@ art/validation/*
 !art/validation/junior-tasks-validation.json
 *.blend1
 *.blend2
+
+# FBX importer texture extraction; editable source textures are in art/textures.
+*.fbm/

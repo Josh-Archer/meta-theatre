@@ -10,9 +10,9 @@ const root=path.resolve(__dirname,'../..');
   const primitives=json.meshes.flatMap(x=>x.primitives);
   const triangles=primitives.reduce((s,p)=>s+json.accessors[p.indices].count/3,0);
   reports[name]={bytes:bytes.length,triangles,drawCalls:primitives.length,materials:json.materials.length,images:json.images?.length||0,requiredExtensions:json.extensionsRequired||[],issues:report.issues};
-  // Roadster v2 adds real wheel openings, cockpit fittings, optics and suit geometry.
+  // Roadster v3 adds a compound glass canopy and sculpted modern body.
   // Keep its explicit cap separate from the unchanged ISS budget; see art/ROADSTER.md.
-  const budget=name==='space_roadster'?{triangles:125000,drawCalls:10}:{triangles:45000,drawCalls:8};
+  const budget=name==='space_roadster'?{triangles:145000,drawCalls:10}:{triangles:45000,drawCalls:8};
   const runtime=fs.readFileSync(path.join(root,'app/src/main/assets',name+'.glb'));
   if(report.issues.numErrors || report.issues.numWarnings || json.extensionsRequired?.length ||
       triangles>budget.triangles || primitives.length>budget.drawCalls || !bytes.equals(runtime))process.exitCode=1;
