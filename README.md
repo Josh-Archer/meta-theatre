@@ -97,7 +97,7 @@ The ISS and Roadster make frequent passes across the forward view, above the
 default movie screen. Their first passes start 3 and 12 seconds after scene
 creation; they repeat every 120 and 150 seconds. Quiet cinema pauses them while
 the movie is visible. Hiding the screen restores ambient lighting and flybys.
-The rebuilt modern Roadster and Starman source, renders and
+The modern Roadster has an open roof and visible Starman occupant. Its source, renders and
 Blender/Unreal validation are documented in [art/ROADSTER.md](art/ROADSTER.md).
 
 The account token stays in the app's private storage on the headset. Sign out

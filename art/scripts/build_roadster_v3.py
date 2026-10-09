@@ -1,4 +1,4 @@
-"""Run through Blender MCP in ROADSTER v3 | Reference design. Front is -Y; units are meters.
+"""Run through Blender MCP in ROADSTER v3 | Open cockpit. Front is -Y; units are meters.
 
 Reference: user-supplied modern red Roadster image. Proportions are visually
 estimated from that photograph, not certified manufacturer dimensions.
@@ -11,7 +11,7 @@ from pathlib import Path
 from mathutils import Vector
 ROOT = Path(__file__).resolve().parents[2]
 scene = bpy.context.scene
-assert scene.name == 'ROADSTER v3 | Reference design'
+assert scene.name == 'ROADSTER v3 | Open cockpit'
 assert not scene.objects, 'Use a fresh authoring scene; never replace an existing scene.'
 COL = bpy.data.collections.new('ROADSTER v3 | Editable components')
 scene.collection.children.link(COL)
@@ -258,23 +258,17 @@ for side in [-1,1]:
     tube('Thin painted A pillar',[windshield(t,0 if side<0 else 1) for t in np.linspace(0,1,33)],.012,red,10)
     tube('Black window gasket',[windshield(t,.008 if side<0 else .992) for t in np.linspace(0,1,33)],.0035,carbon,6)
 tube('Low windshield base gasket',[windshield(0,i/48) for i in range(49)],.005,carbon,8)
-# The removable glass roof sits flush with the canopy; open side windows expose the cabin.
-def roof(t,u):
-    q=2*u-1;y=.17+.62*t
-    x=q*(.75+.006*math.sin(t*math.pi))
-    z=1.272+.022*math.sin(t*math.pi)-.050*q*q
-    return (x,y,z)
-surface('Flush removable panoramic roof',24,48,roof,window)
-tube('Flush roof front seal',[roof(0,i/48) for i in range(49)],.004,carbon,8)
-tube('Flush roof rear seal',[roof(1,i/48) for i in range(49)],.004,carbon,8)
+# Roof panel and longitudinal roof rails are removed for the open cockpit.
+# Retain the windshield header and rear canopy rim as finished cut edges.
+tube('Finished windshield header',[windshield(1,i/48) for i in range(49)],.009,carbon,8)
 def rear_glass(t,u):
     q=2*u-1
     z=interp(t,[(0,1.272),(.28,1.21),(.63,1.016),(1,topz(.57,1.46)+.002)])
     return (q*(.75-.18*t),.79+.67*t,z-.050*q*q*(1-t))
 surface('Curved fastback rear glass',28,48,rear_glass,window)
+tube('Finished rear canopy rim',[rear_glass(0,i/48) for i in range(49)],.009,carbon,8)
 tube('Rear glass seal',[rear_glass(1,i/48) for i in range(49)],.005,carbon,8)
 for side in [-1,1]:
-    tube('Flush canopy perimeter',[roof(t,0 if side<0 else 1) for t in np.linspace(0,1,25)],.009,carbon,8)
     # The rear shoulder wraps directly into the glass edge, closing the previous open gap.
     def pillar(t,u,side=side):
         edge=rear_glass(t,0 if side<0 else 1);y=edge[1]
@@ -408,7 +402,7 @@ ellipsoid('Steering wheel airbag',center,(.044,.021,.04),leather)
 tube('Steering column',[tuple(center),tuple(center+normal*.18)],.028,carbon)
 
 for o in set(COL.objects)-before_suit:
-    o.location.y+=.18;o.location.z-=.055
+    o.location.y+=.18;o.location.z+=.035
 
 # Minimal geometric badges; no personal license plates or imported photograph textures.
 def badge_text(name,body,loc,size,mat,rotation):
@@ -422,6 +416,8 @@ mesh('Small nose T badge',[(x,y,topz(x,y)+.003) for x,y in [(-.038,-2.165),(.038
 scene['reference']='User-supplied modern red Roadster image; artist-estimated surfaces and dimensions'
 scene['generation']='Modern concept design matching the supplied image'
 scene['historical_payload']=False
+scene['open_cockpit']=True
+scene['occupant']='Starman: white suit, helmet, black visor, gloves and restraints'
 scene['nominal_length_m']=4.60;scene['wheelbase_m']=2.88
 scene['asset_origin']='Body center, tire contact plane z=0; front -Y'
 bpy.context.view_layer.update()

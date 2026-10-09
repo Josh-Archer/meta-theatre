@@ -3,7 +3,7 @@ import bpy, json
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 scene=bpy.context.scene
-assert scene.name=='ROADSTER v3 | Reference design'
+assert scene.name=='ROADSTER v3 | Open cockpit'
 col=next(c for c in scene.collection.children if c.name.startswith('ROADSTER v3 | Editable components'))
 bpy.context.view_layer.update();deps=bpy.context.evaluated_depsgraph_get();copies=[]
 for o in col.all_objects:
@@ -37,5 +37,5 @@ for o in col.all_objects:
                     node.image.filepath='//../textures/roadster/carbon_twill.png'
 # Save just this scene and dependencies; retain all other live scenes in the session.
 bpy.data.libraries.write(str(ROOT/'art/blender/space_roadster.blend'),{scene},fake_user=True,compress=True)
-(ROOT/'art/validation/roadster-v3/authoring-report.json').write_text(json.dumps(report,indent=2))
+(ROOT/'art/validation/roadster-open/authoring-report.json').write_text(json.dumps(report,indent=2))
 result=report

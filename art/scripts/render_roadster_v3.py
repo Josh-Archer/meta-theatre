@@ -3,7 +3,7 @@ import bpy, math
 from pathlib import Path
 from mathutils import Vector
 ROOT=Path(__file__).resolve().parents[2];scene=bpy.context.scene
-assert scene.name in {'ROADSTER v3 | Reference design','ROADSTER v3 | Runtime round trip'}
+assert scene.name in {'ROADSTER v3 | Open cockpit','ROADSTER v3 | Open cockpit round trip'}
 studio=bpy.data.collections.new('ROADSTER v3 | Studio review');scene.collection.children.link(studio)
 def studio_object(o):
     for c in list(o.users_collection):c.objects.unlink(o)
@@ -30,11 +30,13 @@ try:
 except Exception:scene.cycles.device='CPU'
 scene.render.resolution_x=1400;scene.render.resolution_y=900;scene.render.resolution_percentage=100
 scene.view_settings.view_transform='AgX';scene.view_settings.look='AgX - Medium High Contrast';scene.render.image_settings.file_format='PNG'
-views=[('front',(5,-7,2.20)),('rear',(5,7,2.8)),('side',(-6,0,1.7))]
-OUT=ROOT/'art/validation/roadster-v3'
-if scene.name.endswith('Runtime round trip'):OUT=OUT/'roundtrip'
+views=[('front',(-5,-7,3.4)),('rear',(-5,7,3.2)),('side',(-6,0,1.7)),('cockpit',(-3,-3,3.4))]
+OUT=ROOT/'art/validation/roadster-open'
+if scene.name.endswith('round trip'):OUT=OUT/'roundtrip'
 OUT.mkdir(parents=True,exist_ok=True)
 for name,pos in views:
-    camera.location=pos;camera.rotation_euler=(Vector((0,0,.63))-camera.location).to_track_quat('-Z','Y').to_euler()
+    camera.data.ortho_scale=3.2 if name=='cockpit' else 5.65
+    target=Vector((-.15,.22,.80)) if name=='cockpit' else Vector((0,0,.63))
+    camera.location=pos;camera.rotation_euler=(target-camera.location).to_track_quat('-Z','Y').to_euler()
     scene.render.filepath=str(OUT/(name+'.png'));bpy.ops.render.render(write_still=True)
 result={'renders':[name+'.png' for name,_ in views]}
