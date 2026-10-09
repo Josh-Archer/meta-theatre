@@ -64,6 +64,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val query by model.librarySearchQuery.collectAsState()
     val filter by model.librarySearchFilter.collectAsState()
     val keyboardOpen by model.librarySearchKeyboardOpen.collectAsState()
+    val confirmSignOut by model.signOutConfirmation.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
     }.collectAsState(initial = false)
@@ -71,6 +72,10 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val window = PosterGrid.window(tiles.size, page)
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, onPrimary = Color(0xFF1A1408))) {
+        if (confirmSignOut) {
+            SignOutPrompt(model)
+            return@MaterialTheme
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -112,6 +117,21 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
                 }
             }
             ShelfFooter(browse, tiles.size, window)
+        }
+    }
+}
+
+@Composable
+private fun SignOutPrompt(model: TheatreModel) {
+    Box(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().offset(y = 300.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Sign out of Plex?", color = Ink, fontSize = 36.sp)
+            Text("You will need to link your account again.", color = Muted, fontSize = 24.sp)
+        }
+        Row(Modifier.fillMaxWidth().offset(y = (PosterGrid.SIGN_OUT_CONFIRM_TOP * PosterGrid.PANEL_DP).dp)
+            .height(((PosterGrid.SIGN_OUT_CONFIRM_BOTTOM - PosterGrid.SIGN_OUT_CONFIRM_TOP) * PosterGrid.PANEL_DP).dp)) {
+            ZoneButton("Keep signed in", Modifier.fillMaxHeight().weight(1f)) { model.cancelSignOut() }
+            ZoneButton("Sign out", Modifier.fillMaxHeight().weight(1f)) { model.confirmSignOut() }
         }
     }
 }
@@ -302,7 +322,7 @@ private fun ShelfHeader(
         ZoneButton(
             label = action,
             modifier = Modifier.fillMaxHeight().weight(1f - PosterGrid.SIGN_OUT_X),
-        ) { if (action.isNotBlank()) model.signOut() }
+        ) { if (action.isNotBlank()) model.requestSignOut() }
     }
 }
 

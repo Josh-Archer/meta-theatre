@@ -41,7 +41,7 @@ internal object OpenHandPose {
 
 internal data class OpenHandInput(val id: Int, val position: HandPoint, val normal: HandPoint, val aimingAtScreen: Boolean)
 internal enum class ScreenDirection { LEFT, RIGHT, UP, DOWN }
-internal data class OpenHandActions(val move: ScreenDirection? = null, val close: Boolean = false)
+internal data class OpenHandActions(val move: ScreenDirection? = null, val close: Boolean = false, val restore: Boolean = false)
 
 /** A deliberate open-hand stroke owns one action. Two closing palms take priority over swipes. */
 internal class OpenHandGestures {
@@ -49,16 +49,42 @@ internal class OpenHandGestures {
     private data class Clap(val a: OpenHandInput, val b: OpenHandInput, val started: Long)
     private val strokes = mutableMapOf<Int, Stroke>()
     private var clap: Clap? = null
+    private var spread: Clap? = null
     private var blockedUntil = 0L
+    private var restoreBlockedUntil = 0L
     private var clapLatched = false
 
-    fun reset() { strokes.clear(); clap = null; clapLatched = false; blockedUntil = 0L }
+    fun reset() { strokes.clear(); clap = null; spread = null; clapLatched = false; blockedUntil = 0L; restoreBlockedUntil = 0L }
 
-    fun update(hands: List<OpenHandInput>, watching: Boolean, pinchingOrGripping: Boolean, now: Long): OpenHandActions {
+    fun update(hands: List<OpenHandInput>, watching: Boolean, pinchingOrGripping: Boolean, now: Long,
+               screenHidden: Boolean = false): OpenHandActions {
         if (pinchingOrGripping) {
-            strokes.clear(); clap = null; blockedUntil = now + 400L
+            strokes.clear(); clap = null; spread = null; blockedUntil = now + 400L
+            restoreBlockedUntil = now + 400L
             return OpenHandActions()
         }
+        if (screenHidden) {
+            strokes.clear(); clap = null
+            if (now < restoreBlockedUntil) { spread = null; return OpenHandActions() }
+            if (hands.size != 2) { spread = null; return OpenHandActions() }
+            val a = hands[0]; val b = hands[1]
+            val separation = (b.position - a.position).length()
+            val facing = facing(a, b)
+            // No ray target is required to restore an invisible screen.
+            if (spread == null && separation <= 0.20f && facing) spread = Clap(a, b, now)
+            val start = spread ?: return OpenHandActions()
+            val outward = (start.b.position - start.a.position).unit()
+            val aTravel = (a.position - start.a.position).dot(outward * -1f)
+            val bTravel = (b.position - start.b.position).dot(outward)
+            val elapsed = now - start.started
+            if (elapsed in 80L..900L && separation >= 0.40f && aTravel >= 0.08f && bTravel >= 0.08f && facing) {
+                spread = null; blockedUntil = now + 1200L
+                return OpenHandActions(restore = true)
+            }
+            if (elapsed > 900L || !facing || separation < 0.03f) spread = null
+            return OpenHandActions()
+        }
+        spread = null
         if (now < blockedUntil) return OpenHandActions()
         val tracked = hands.associateBy { it.id }
         strokes.keys.retainAll(tracked.keys)
@@ -67,7 +93,7 @@ internal class OpenHandGestures {
             val separation = (b.position - a.position).length()
             if (separation >= 0.30f) clapLatched = false
             val facing = facing(a, b)
-            if (clap == null && !clapLatched && separation >= 0.30f && facing) {
+            if (clap == null && !clapLatched && separation >= 0.30f && facing && a.aimingAtScreen && b.aimingAtScreen) {
                 clap = Clap(a, b, now)
             }
             val start = clap

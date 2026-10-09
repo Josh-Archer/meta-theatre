@@ -65,8 +65,9 @@ class ScreenPlayer internal constructor(
     private var starting = false
     internal var onProgress: ((Long, Long, Boolean) -> Unit)? = null
     private var subtitle: String = ""
-    private var resumeAfterMenu = false
+    private var resumeAfterSuspension = false
     private var menuOpen = false
+    private var screenHidden = false
     private var quality = PlaybackQuality.ORIGINAL
     private val trackCatalog = PlaybackTrackCatalog()
     private var pendingPlayWhenReady = true
@@ -103,7 +104,7 @@ class ScreenPlayer internal constructor(
         player = created
         pending?.let {
             pending = null
-            start(created, it, streamUrlForCurrentChoices(it), pendingPositionMs, pendingPlayWhenReady && !menuOpen)
+            start(created, it, streamUrlForCurrentChoices(it), pendingPositionMs, pendingPlayWhenReady && !menuOpen && !screenHidden)
         }
     }
 
@@ -114,7 +115,8 @@ class ScreenPlayer internal constructor(
         route = quality.startingRoute
         updateTrackChoices(item)
         subtitleCues.value = emptyList()
-        pendingPlayWhenReady = !menuOpen
+        pendingPlayWhenReady = !menuOpen && !screenHidden
+        if (menuOpen || screenHidden) resumeAfterSuspension = true
         val current = player
         if (current == null) {
             pending = item
@@ -176,6 +178,10 @@ class ScreenPlayer internal constructor(
 
     fun toggle() {
         val current = player ?: return
+        if (menuOpen || screenHidden) {
+            resumeAfterSuspension = !resumeAfterSuspension
+            return
+        }
         if (current.playWhenReady) current.pause() else current.play()
         pendingPlayWhenReady = current.playWhenReady
         publish()
@@ -291,21 +297,33 @@ class ScreenPlayer internal constructor(
     }
 
     fun onMenuOpened() {
-        val current = player
-        if (!menuOpen) resumeAfterMenu = current?.playWhenReady ?: pendingPlayWhenReady
-        menuOpen = true
-        pendingPlayWhenReady = false
-        current?.pause()
-        publish()
+        updateSuspension(menu = true, hidden = screenHidden)
     }
 
     fun onMenuClosed() {
-        if (resumeAfterMenu) {
-            pendingPlayWhenReady = true
-            player?.play()
+        updateSuspension(menu = false, hidden = screenHidden)
+    }
+
+    fun setScreenHidden(hidden: Boolean) {
+        updateSuspension(menu = menuOpen, hidden = hidden)
+    }
+
+    private fun updateSuspension(menu: Boolean, hidden: Boolean) {
+        val wasSuspended = menuOpen || screenHidden
+        val suspended = menu || hidden
+        if (!wasSuspended && suspended) resumeAfterSuspension = player?.playWhenReady ?: pendingPlayWhenReady
+        menuOpen = menu
+        screenHidden = hidden
+        if (suspended) {
+            pendingPlayWhenReady = false
+            player?.pause()
+        } else if (wasSuspended) {
+            if (resumeAfterSuspension) {
+                pendingPlayWhenReady = true
+                player?.play()
+            }
+            resumeAfterSuspension = false
         }
-        resumeAfterMenu = false
-        menuOpen = false
         publish()
     }
 
@@ -333,8 +351,9 @@ class ScreenPlayer internal constructor(
         pendingPositionMs = 0
         pendingPlayWhenReady = false
         subtitle = ""
-        resumeAfterMenu = false
+        resumeAfterSuspension = false
         menuOpen = false
+        screenHidden = false
         player?.stop()
         player?.clearMediaItems()
         trackCatalog.reset()

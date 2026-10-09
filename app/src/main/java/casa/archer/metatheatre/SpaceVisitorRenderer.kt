@@ -38,6 +38,7 @@ class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elapsedRealtim
             if (show != entry.visible) {
                 entry.entity.setComponent(Visible(show))
                 entry.visible = show
+                android.util.Log.i("TheatreVisitors", "flyby ${entry.visitor.asset} visible=$show")
             }
             if (p != null) entry.entity.setComponent(Transform(SpaceVisitors.pose(entry.visitor, p)))
         }

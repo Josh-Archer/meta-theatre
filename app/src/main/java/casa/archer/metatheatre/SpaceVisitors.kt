@@ -10,8 +10,8 @@ object SpaceVisitors {
     data class Visitor(val asset: String, val periodSeconds: Double, val durationSeconds: Double,
         val firstPassSeconds: Double, val distance: Float, val displayScale: Float, val elevation: Double,
         val reverse: Boolean)
-    val iss = Visitor("iss.glb", 240.0, 75.0, 15.0, 650f, 1.35f, 48.0, false)
-    val roadster = Visitor("space_roadster.glb", 420.0, 55.0, 105.0, 42f, 1.5f, 40.0, true)
+    val iss = Visitor("iss.glb", 120.0, 85.0, 3.0, 420f, 1.35f, 20.0, false)
+    val roadster = Visitor("space_roadster.glb", 150.0, 95.0, 12.0, 24f, 1.5f, 16.0, true)
     val all = listOf(iss, roadster)
 
     fun progress(visitor: Visitor, elapsedSeconds: Double): Double? {
@@ -22,9 +22,9 @@ object SpaceVisitors {
 
     fun pose(visitor: Visitor, progress: Double): Pose {
         val p = progress.coerceIn(0.0, 1.0)
-        // Enter and leave behind the seat. The visible crossing stays above the Earth and screen.
-        val yaw = Math.toRadians((-150 + p * 300) * if (visitor.reverse) -1 else 1)
-        val elevation = Math.toRadians(visitor.elevation + 10 * sin(PI * p))
+        // Keep the entire pass in front of the seat and within a comfortable upward glance.
+        val yaw = Math.toRadians((-42 + p * 84) * if (visitor.reverse) -1 else 1)
+        val elevation = Math.toRadians(visitor.elevation + 5 * sin(PI * p))
         val center = EarthRenderer.SEAT_EYE + Vector3(
             (sin(yaw) * cos(elevation)).toFloat(), sin(elevation).toFloat(),
             (cos(yaw) * cos(elevation)).toFloat()) * visitor.distance

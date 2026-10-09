@@ -99,6 +99,10 @@ class TheatreActivity : AppSystemActivity() {
         super.onCreate(savedInstanceState)
         model.onPrepareScreen = { ensureVideo() }
         model.onWatching = { watching -> applyWatching(watching) }
+        model.onScreenHidden = { hidden ->
+            grip?.screenHidden = hidden
+            applyWatching(!model.libraryOpen.value)
+        }
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
@@ -192,11 +196,12 @@ class TheatreActivity : AppSystemActivity() {
                 onSeekFraction = { fraction -> scope.launch { model.seekToFraction(fraction) } },
                 onSizeSaved = { model.state.saveSize(it) },
                 readOpenHands = { nativeHands?.read().orEmpty() },
-                onCloseVideo = { scope.launch { model.closeToHome() } },
+                onScreenHiddenChange = { hidden -> scope.launch { model.setScreenHidden(hidden) } },
                 handsNavigating = { handLocomotion?.areHandsInUse() == true },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
             )
             grip = system
+            system.screenHidden = model.screenHidden.value
             system.restoreSize(model.state.screenSize())
             systemManager.registerLateSystem(system)
         }
@@ -262,19 +267,22 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun applyWatching(watching: Boolean) {
-        quietCinema.setWatching(watching)
+        val hidden = model.screenHidden.value
+        quietCinema.setWatching(watching && !hidden)
+        screenPlayer.setScreenHidden(watching && hidden)
         val panel = screen ?: return
         Log.i(TAG, if (watching) "show movie" else "show library")
-        runCatching { panel.setComponent(Visible(!watching)) }
+        runCatching { panel.setComponent(Visible(!watching && !hidden)) }
         panel.setComponent(
             IsdkPanelResize(
-                enabled = !watching,
+                enabled = !watching && !hidden,
                 resizeMode = ResizeMode.Relayout,
                 minDimensions = Vector2(1.2f, 1.2f * 9f / 16f),
                 maxDimensions = Vector2(8f, 8f * 9f / 16f),
                 preserveAspectRatio = true,
             ),
         )
+        panel.setComponent(IsdkGrabbable(enabled = !hidden))
         grip?.watching = watching
         grip?.syncOverlays()
     }
@@ -469,8 +477,10 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun onScreenPress(xNorm: Float, yNorm: Float) {
+        if (model.screenHidden.value) return
         val x = xNorm.coerceIn(0f, 1f)
         val y = yNorm.coerceIn(0f, 1f)
+        if (model.signOutConfirmationPress(x, y)) return
         val watching = !model.libraryOpen.value && screenPlayer.transport.value.title.isNotBlank()
         if (watching) {
             onMoviePress()
@@ -508,8 +518,7 @@ class TheatreActivity : AppSystemActivity() {
             x >= PosterGrid.PLAYER_X && x < PosterGrid.SIGN_OUT_X ->
                 if (model.browse.value is Browse.Home) model.openLibraries() else model.showPlayer()
             x >= PosterGrid.SIGN_OUT_X -> {
-                Log.i(TAG, "sign out")
-                model.signOut()
+                model.requestSignOut()
             }
         }
     }

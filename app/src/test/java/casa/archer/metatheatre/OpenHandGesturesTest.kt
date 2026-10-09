@@ -71,6 +71,39 @@ class OpenHandGesturesTest {
         assertFalse(g.update(pair(0.1f), true, false, 1100).close)
     }
 
+    @Test fun closingThenSpreadingRestoresHiddenScreenWithoutAnInvisibleRayTarget() {
+        val g = OpenHandGestures()
+        g.update(pair(0.5f), true, false, 0)
+        assertTrue(g.update(pair(0.12f), true, false, 200).close)
+        g.update(pair(0.12f).map { it.copy(aimingAtScreen = false) }, true, false, 220, screenHidden = true)
+        val restore = g.update(pair(0.5f).map { it.copy(aimingAtScreen = false) }, true, false, 420, screenHidden = true)
+        assertTrue(restore.restore)
+        assertFalse(restore.close)
+        assertNull(restore.move)
+        assertFalse(g.update(pair(0.5f), true, false, 440, screenHidden = true).restore)
+    }
+
+    @Test fun hiddenScreenRejectsTrackingLossSlowAndOneHandedRestores() {
+        val g = OpenHandGestures()
+        g.update(pair(0.12f), true, false, 0, true)
+        g.update(emptyList(), true, false, 100, true)
+        assertFalse(g.update(pair(0.5f), true, false, 200, true).restore)
+        g.reset(); g.update(pair(0.12f), true, false, 0, true)
+        assertFalse(g.update(pair(0.5f), true, false, 1100, true).restore)
+        g.reset(); g.update(pair(0.12f), true, false, 0, true)
+        val oneHand = listOf(pair(0.12f)[0], hand(1, x = 0.5f, normal = HandPoint(-1f, 0f, 0f)))
+        assertFalse(g.update(oneHand, true, false, 200, true).restore)
+    }
+
+    @Test fun hidingMustStartAtTheScreenAndPinchingBlocksRestoring() {
+        val g = OpenHandGestures()
+        g.update(pair(0.5f).map { it.copy(aimingAtScreen = false) }, true, false, 0)
+        assertFalse(g.update(pair(0.12f), true, false, 200).close)
+        g.update(pair(0.12f), true, true, 500, true)
+        g.update(pair(0.12f), true, false, 600, true)
+        assertFalse(g.update(pair(0.5f), true, false, 800, true).restore)
+    }
+
     private fun joints(): MutableList<HandJoint> {
         val j = MutableList(26) { HandJoint(HandPoint.ZERO, 10) }
         j[0] = HandJoint(HandPoint(0f, 0.05f, 0f), 10)

@@ -81,7 +81,20 @@ is open, it dims the cabin lighting and hides and pauses flybys. Closing the
 movie restores normal lighting and resumes the flyby clock. The setting is
 saved on the headset.
 
-The account token stays in the app's private storage on the headset. Sign out clears it.
+Bring two open palms together while aiming at the screen to hide it. Spread
+both palms apart to restore it, or press a controller trigger. The screen keeps
+its position and size. A movie pauses while hidden and resumes its previous
+playback intent when restored; an already paused movie stays paused. The gesture
+also hides the library. Hidden screens do not accept movie or library presses.
+
+The ISS and Roadster make frequent passes across the forward view, above the
+default movie screen. Their first passes start 3 and 12 seconds after scene
+creation; they repeat every 120 and 150 seconds. Quiet cinema pauses them while
+the movie is visible. Hiding the screen restores ambient lighting and flybys.
+
+The account token stays in the app's private storage on the headset. Sign out
+requires confirmation and clears it. App updates retain the token; if the token
+is already missing, use Link Plex again.
 
 ## Automated checks
 

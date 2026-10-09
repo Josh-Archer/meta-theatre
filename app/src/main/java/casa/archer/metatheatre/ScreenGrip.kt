@@ -48,7 +48,7 @@ internal class ScreenGripSystem(
     private val onSeekFraction: (Float) -> Unit,
     private val onSizeSaved: (ScreenSize) -> Unit,
     private val readOpenHands: () -> List<OpenPalm>,
-    private val onCloseVideo: () -> Unit,
+    private val onScreenHiddenChange: (Boolean) -> Unit,
     private val handsNavigating: () -> Boolean,
     private val hasSubtitleCues: () -> Boolean = { false },
 ) : SystemBase() {
@@ -62,7 +62,20 @@ internal class ScreenGripSystem(
             stickSeek.clear()
             railSelections.clear()
             onSeekPreview(null)
-            autoHide.setWatching(value, SystemClock.uptimeMillis())
+            autoHide.setWatching(value && !screenHidden, SystemClock.uptimeMillis())
+        }
+    var screenHidden: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            handGestures.reset()
+            railSelections.clear()
+            grab = null
+            screenMotion = null
+            onSeekPreview(null)
+            autoHide.setWatching(watching && !value, SystemClock.uptimeMillis())
+            screen.setComponent(Visible(!watching && !value))
+            syncOverlays(force = true)
         }
     var overlays: ScreenOverlays? = null
     private val autoHide = PlayerAutoHide()
@@ -88,6 +101,7 @@ internal class ScreenGripSystem(
     private var lastOverlayWidth = 0f
     private var lastOverlayHeight = 0f
     private var lastWatching = false
+    private var lastScreenHidden = false
     private var lastSubtitlesVisible = false
     private var lastPlayerFraction = -1f
     private var observedSize: ScreenSize? = null
@@ -176,17 +190,19 @@ internal class ScreenGripSystem(
         val width = size.width
         val height = size.height
         val geometryChanged = force || lastOverlays !== overlays || lastOverlayPose != pose ||
-            lastOverlayWidth != width || lastOverlayHeight != height || lastWatching != watching
-        val subtitlesVisible = watching && hasSubtitleCues()
+            lastOverlayWidth != width || lastOverlayHeight != height || lastWatching != watching || lastScreenHidden != screenHidden
+        val subtitlesVisible = watching && !screenHidden && hasSubtitleCues()
         if (!geometryChanged && lastPlayerFraction == playerFraction && lastSubtitlesVisible == subtitlesVisible) return
         val forward = pose.forward()
         val up = pose.up()
-        val show = watching
+        val show = watching && !screenHidden
         val videoShift = if (show) Stage.VIDEO_FORWARD else -Stage.HIDDEN_BACK
         // OpenXR quad layers face local -Z in the SDK API; UI meshes face local +Z.
         val videoRotation = pose.q * Quaternion(pitch = 0f, yaw = 180f, roll = 0f)
         if (geometryChanged) {
-            overlays.video.setComponent(Transform(Pose(pose.t.plus(forward.times(videoShift)), videoRotation)))
+            val videoPosition = if (screenHidden) Vector3(0f, -1000f, 0f) else pose.t.plus(forward.times(videoShift))
+            overlays.video.setComponent(Transform(Pose(videoPosition, videoRotation)))
+            overlays.video.setComponent(Visible(show))
             overlays.video.setComponent(scaleTo(width, height, overlays.videoWidth, overlays.videoHeight))
             overlays.subtitles?.setComponent(Transform(Pose(
                 pose.t.plus(forward.times(Stage.PLAYER_FORWARD)), pose.q,
@@ -211,6 +227,7 @@ internal class ScreenGripSystem(
         lastOverlayWidth = width
         lastOverlayHeight = height
         lastWatching = watching
+        lastScreenHidden = screenHidden
         lastSubtitlesVisible = subtitlesVisible
         lastPlayerFraction = playerFraction
     }
@@ -265,6 +282,10 @@ internal class ScreenGripSystem(
             val previousDown = downState.put(id, down)
             val pressed = previousDown == false && down
             val released = previousDown == true && !down
+            if (screenHidden) {
+                if (!isHand && pressed) onScreenHiddenChange(false)
+                continue
+            }
             if (isHand && (pressed || released)) Log.i(TAG, "hand pinch ${if (down) "down" else "up"}")
 
             if (watching) {
@@ -347,7 +368,7 @@ internal class ScreenGripSystem(
             }
         }
         if (grab?.driver?.id !in ids) grab = null
-        if (watching) {
+        if (watching && !screenHidden) {
             val size = screenSize()
             val actions = handGestures.update(hands, size, now)
             if (actions.resizing != wasHandResizing) {
@@ -377,7 +398,7 @@ internal class ScreenGripSystem(
             if (libraryScroll != 0) onScroll(libraryScroll)
         }
         processOpenHands(inputs, now)
-        placeCursor(hovered)
+        placeCursor(if (screenHidden) null else hovered)
     }
 
     private fun processOpenHands(inputs: List<TrackedInput>, now: Long) {
@@ -408,11 +429,14 @@ internal class ScreenGripSystem(
             used.add(input.entity.id)
             OpenHandInput(palm.side, project(palm.position), project(palm.normal), aim(input.pose)?.onFace == true)
         }
-        val actions = openGestures.update(palms, watching, pinching || gripping, now)
+        val actions = openGestures.update(palms, true, pinching || gripping, now, screenHidden)
         if (actions.close) {
             screenMotion = null
-            Log.i(TAG, "open hand clap close")
-            onCloseVideo()
+            Log.i(TAG, "open hands hide screen")
+            onScreenHiddenChange(true)
+        } else if (actions.restore) {
+            Log.i(TAG, "open hands restore screen")
+            onScreenHiddenChange(false)
         } else actions.move?.let { direction ->
             val delta = when (direction) {
                 ScreenDirection.LEFT -> right.times(-0.35f)

@@ -54,6 +54,9 @@ class TheatreModel(
     val error = MutableStateFlow<String?>(null)
     val canGoBack = MutableStateFlow(false)
     val libraryOpen = MutableStateFlow(true)
+    val screenHidden = MutableStateFlow(false)
+    val signOutConfirmation = MutableStateFlow(false)
+    var onScreenHidden: ((Boolean) -> Unit)? = null
     val page = MutableStateFlow(0)
     val playerControlsOpen = MutableStateFlow(false)
     val librarySearchQuery = MutableStateFlow("")
@@ -103,6 +106,7 @@ class TheatreModel(
         onScreenResize = null
         onQuietCinemaPreference = null
         onPlayerInteraction = null
+        onScreenHidden = null
     }
 
     fun link() {
@@ -131,6 +135,7 @@ class TheatreModel(
     }
 
     fun signOut() {
+        signOutConfirmation.value = false
         pinJob?.cancel()
         generation++
         closeToHome()
@@ -143,6 +148,7 @@ class TheatreModel(
     }
 
     fun back() {
+        if (signOutConfirmation.value) { cancelSignOut(); return }
         if (stack.size <= 1) return
         cancelBrowseWork()
         stack.removeLast()
@@ -251,6 +257,39 @@ class TheatreModel(
 
     fun openLibrary() = closeToHome()
 
+    fun setScreenHidden(hidden: Boolean) {
+        if (screenHidden.value == hidden) return
+        screenHidden.value = hidden
+        player.setScreenHidden(hidden && !libraryOpen.value)
+        onScreenHidden?.invoke(hidden)
+    }
+
+    fun requestSignOut() {
+        if (screenHidden.value) return
+        if (browse.value is Browse.Linking) {
+            pinJob?.cancel()
+            generation++
+            show(Browse.SignedOut, replace = true)
+        } else if (browse.value !is Browse.SignedOut) {
+            signOutConfirmation.value = true
+        }
+    }
+
+    fun cancelSignOut() { signOutConfirmation.value = false }
+
+    fun confirmSignOut() {
+        if (signOutConfirmation.value) signOut()
+    }
+
+    /** Same normalized button row as the Compose prompt; all other presses are consumed. */
+    fun signOutConfirmationPress(x: Float, y: Float): Boolean {
+        if (!signOutConfirmation.value) return false
+        if (y in PosterGrid.SIGN_OUT_CONFIRM_TOP..PosterGrid.SIGN_OUT_CONFIRM_BOTTOM) {
+            if (x < 0.5f) cancelSignOut() else confirmSignOut()
+        }
+        return true
+    }
+
     fun closeToHome() {
         saveCheckpoint()
         activeMovie = null
@@ -259,6 +298,8 @@ class TheatreModel(
         cancelBrowseWork()
         player.close()
         libraryOpen.value = true
+        setScreenHidden(false)
+        signOutConfirmation.value = false
         onWatching?.invoke(false)
         showHome()
         Log.i(TAG, "movie closed to recently watched")

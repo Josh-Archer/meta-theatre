@@ -29,6 +29,8 @@ internal object PosterGrid {
     const val BACK_X = 0.18f
     const val PLAYER_X = 0.62f
     const val SIGN_OUT_X = 0.82f
+    const val SIGN_OUT_CONFIRM_TOP = 0.60f
+    const val SIGN_OUT_CONFIRM_BOTTOM = 0.78f
     const val PREV_X = 0.28f
     const val NEXT_X = 0.72f
 

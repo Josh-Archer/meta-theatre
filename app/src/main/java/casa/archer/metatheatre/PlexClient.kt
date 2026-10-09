@@ -69,17 +69,17 @@ class PlexException(message: String) : Exception(message)
 class PlexClient(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val clientId: String = prefs.getString(KEY_CLIENT, null) ?: UUID.randomUUID().toString().also {
-        prefs.edit().putString(KEY_CLIENT, it).apply()
+        check(prefs.edit().putString(KEY_CLIENT, it).commit()) { "Couldn't save the Plex device identity" }
     }
 
     var token: String?
         get() = prefs.getString(KEY_TOKEN, null)
         set(value) {
-            prefs.edit().putString(KEY_TOKEN, value).apply()
+            check(prefs.edit().putString(KEY_TOKEN, value).commit()) { "Couldn't save the Plex sign-in" }
         }
 
     fun clearToken() {
-        prefs.edit().remove(KEY_TOKEN).apply()
+        check(prefs.edit().remove(KEY_TOKEN).commit()) { "Couldn't clear the Plex sign-in" }
     }
 
     fun requestPin(): Pin {
