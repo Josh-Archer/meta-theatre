@@ -29,12 +29,25 @@ import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 
-/** Three fixed meshes. Civil-time lighting needs only one uniform update per second. */
+/** Three shared layers. Civil-time lighting needs only one uniform update per second. */
 class EarthRenderer(private val activity: TheatreActivity) {
     private val materials = mutableListOf<SceneMaterial>()
     private val textures = mutableListOf<SceneTexture>()
     private val creators = mutableListOf<String>()
     private val entities = mutableListOf<Entity>()
+    private var worldFrame = Pose()
+    private var spin = 0f
+    private fun pose() = EarthExploration.renderPose(worldFrame, spin)
+    internal fun target(): VisitorTarget? = if (entities.size != 3) null else
+        VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
+
+    fun setExploration(frame: Pose, spinDegrees: Float) {
+        val moved = worldFrame != frame
+        worldFrame = Pose(frame.t.copy(), frame.q.copy())
+        spin = spinDegrees
+        entities.forEach { it.setComponent(Transform(pose())) }
+        if (moved) update()
+    }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     suspend fun create() {
@@ -85,7 +98,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
             entities.add(Entity.create(
                 Mesh(creator.toUri(), hittable = MeshCollision.NoCollision),
                 Scale(Vector3(RADIUS, RADIUS, RADIUS)),
-                Transform(Pose(CENTER, orientation())),
+                Transform(pose()),
             ))
         }
         Log.i("Earth", "Dynamic Earth ready; local zone=${ZoneId.systemDefault()}, centered at equator/100W")
@@ -105,7 +118,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
     }
 
     fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.shaderSunPosition(SolarSystem.sunPosition(instant, zone))
+        val position = SolarSystem.shaderSunPosition(worldFrame * SolarSystem.sunPosition(instant, zone))
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 

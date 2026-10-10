@@ -1,8 +1,8 @@
 # Meta Theatre Earth — 2026-10-04
 
-The Quest app now uses one fixed globe with continuous, headset-local lighting.
+The Quest app uses a globe with continuous, headset-local lighting.
 Sunlight, the twilight band, city lights, clouds and the atmospheric rim follow
-the same moving sun. The globe faces the nominal seat at **0° latitude, 100°W
+the same moving sun. The initial view faces the nominal seat at **0° latitude, 100°W
 longitude**: the equator beneath the central USA, with north up.
 The surrounding planets, Moon, visible Sun and catalog sky are documented in
 [`SOLAR_SYSTEM.md`](SOLAR_SYSTEM.md).
@@ -23,17 +23,20 @@ clock adjustments and time-zone changes; no elapsed-time accumulator can drift.
 | 18:00 | Dusk: sunlight remains on the left/west |
 
 Lighting moves continuously between these examples. Per-pixel smoothstep masks
-blend daylight and city emission across the terminator. Geography remains fixed;
-the app does not swap day/night models or spin the globe with the clock.
+blend daylight and city emission across the terminator. The app does not swap
+day/night models or spin the globe with the clock. Manual spin and geographic
+observer controls are described in [Earth exploration validation](validation/EARTH_EXPLORATION.md).
 
 This is an artistic **24-hour civil-time cycle**, not seasonal astronomical
 sunrise/sunset. It does not request location, fetch live weather, or animate cloud
 cover. An explicit clock or time-zone change immediately selects the corresponding
 lighting; it is not eased across a discontinuous clock change.
 
-The app keeps its 90 m Earth radius, center `(18, -35, 150)`, theatre layout,
-playback and panel interactions. The Earth has no collision. Its orientation
-points the authored front toward the nominal seat eye `(0, 1.6, 0)`.
+The canonical scene keeps its 90 m Earth radius and center `(18, -35, 150)`.
+The initial orientation points the authored front toward the nominal seat eye
+`(0, 1.6, 0)`. Exploring a different hemisphere rebases the environment while
+keeping the viewer and chair upright. Earth has a separate sphere target for
+spin gestures and no mesh collision; playback and panel interactions remain available.
 
 ## Editable source and runtime assets
 
@@ -130,10 +133,11 @@ and Android NDK 27.2.12479018. The debug APK is
   `validation/earth_dynamic_build.json`. The latest integrated APK SHA-256 and
   package checks are in `validation/solar_system_build.json`.
 
-The APK has **not been installed or launched on Quest**. Native importer
-orientation, stereo appearance, alpha sorting, frame timing and actual memory
-use remain headset checks. Desktop renders, shader compilation and JVM tests
-do not establish those results.
+The original 2026-10-04 validation did not include a Quest installation. The
+later exploration build was installed; see [its validation record](validation/EARTH_EXPLORATION.md).
+Native importer orientation, new polar views, stereo appearance, alpha sorting,
+frame timing and actual memory use still need direct headset checks. Desktop
+renders, shader compilation and JVM tests do not establish those results.
 
 ## Preserved static variants and Unreal sandbox
 

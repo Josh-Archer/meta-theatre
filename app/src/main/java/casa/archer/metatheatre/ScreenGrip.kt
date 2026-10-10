@@ -53,6 +53,8 @@ internal class ScreenGripSystem(
     private val viewerPose: () -> Pose = { Pose(Vector3(0f, 1.2f, 0f)) },
     private val visitors: SpaceVisitorRenderer? = null,
     private val onViewTurn: (Float) -> Unit = {},
+    private val earthTarget: () -> VisitorTarget? = { null },
+    private val onEarthSpin: (Float) -> Unit = {},
     private val hasSubtitleCues: () -> Boolean = { false },
 ) : SystemBase() {
     var watching: Boolean = false
@@ -62,6 +64,7 @@ internal class ScreenGripSystem(
             revealMotion.reset()
             handGestures.reset()
             openGestures.reset()
+            earthSpin.cancel()
             stickSeek.clear()
             railSelections.clear()
             onSeekPreview(null)
@@ -91,6 +94,8 @@ internal class ScreenGripSystem(
     private val revealMotion = RailRevealMotion()
     private val handGestures = ScreenHandGestures()
     private val openGestures = OpenHandGestures()
+    private val earthSpin = EarthSpinGesture()
+    fun cancelEarthGrab() = earthSpin.cancel()
     private data class ScreenMotion(val start: Pose, val end: Vector3, val started: Long)
     private var screenMotion: ScreenMotion? = null
     private val stickSeek = mutableMapOf<Long, MovieStickSeek>()
@@ -265,7 +270,7 @@ internal class ScreenGripSystem(
             val pose = runCatching { entity.getComponent<Transform>().transform }.getOrNull() ?: return@mapNotNull null
             TrackedInput(entity, controller, pose)
         }.toList()
-        val visitorInput = visitors?.interact(inputs.map { input ->
+        val pointers = inputs.map { input ->
             val isHand = input.controller.type == ControllerType.HAND
             val down = if (isHand) input.controller.isDown(PINCH_R) || input.controller.isDown(PINCH_L)
                 else input.controller.isDown(TRIGGER_L) || input.controller.isDown(TRIGGER_R)
@@ -273,7 +278,16 @@ internal class ScreenGripSystem(
                 aim(input.pose)?.takeIf { it.onFace }?.distance,
                 aimRail(input.pose, false)?.takeIf { watching && playerOpen && it.onFace }?.distance)
             VisitorPointer(input.entity.id, input.pose, down, blockers.minOrNull() ?: Float.POSITIVE_INFINITY)
-        }, viewerPose(), now, navigating) ?: VisitorInputResult()
+        }
+        val globe = earthTarget()
+        val visitorPointers = if (globe == null) pointers else pointers.map { pointer ->
+            ScenePointer.hit(pointer, globe)?.let { pointer.copy(maxDistance = it.distance) } ?: pointer
+        }
+        val visitorInput = visitors?.interact(visitorPointers, viewerPose(), now, navigating) ?: VisitorInputResult()
+        val earthInput = earthSpin.update(pointers, globe, viewerPose(), navigating, visitorInput.owned)
+        if (earthInput.degrees != 0f) onEarthSpin(earthInput.degrees)
+        val sceneOwned = visitorInput.owned + earthInput.owned
+        val sceneHover = listOfNotNull(visitorInput.hover, earthInput.hover).minByOrNull { it.distance }
         val ids = inputs.map { it.entity.id }.toSet()
         val summary = "HAND=${inputs.count { it.controller.type == ControllerType.HAND }} CONTROLLER=${inputs.count { it.controller.type == ControllerType.CONTROLLER }}"
         if (summary != lastInputSummary) {
@@ -289,7 +303,7 @@ internal class ScreenGripSystem(
         stickSeek.keys.retainAll(ids)
         revealMotion.retain(ids)
 
-        var hovered: Aim? = visitorInput.hover?.let { Aim(false, .5f, .5f, it.distance, it.point, it.normal) }
+        var hovered: Aim? = sceneHover?.let { Aim(false, .5f, .5f, it.distance, it.point, it.normal) }
         var libraryScroll = 0
         val handAims = mutableMapOf<Long, Aim>()
         val hands = mutableListOf<HandInput>()
@@ -304,7 +318,7 @@ internal class ScreenGripSystem(
             val previousDown = downState.put(id, down)
             val pressed = previousDown == false && down
             val released = previousDown == true && !down
-            if (id in visitorInput.owned) continue
+            if (id in sceneOwned) continue
             if (!interactive) {
                 if (!isHand) {
                     turnFromStick(controller)
@@ -419,8 +433,8 @@ internal class ScreenGripSystem(
         }
         for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
         if (!watching && !screenHidden && libraryScroll != 0) onScroll(libraryScroll)
-        if (!navigating) processOpenHands(inputs, now, visitorInput.owned.isNotEmpty())
-        placeCursor(hovered?.takeIf { interactive || visitorInput.hover != null })
+        if (!navigating) processOpenHands(inputs, now, sceneOwned.isNotEmpty())
+        placeCursor(hovered?.takeIf { interactive || sceneHover != null })
     }
 
     private fun processOpenHands(inputs: List<TrackedInput>, now: Long, visitorOwned: Boolean) {
@@ -475,8 +489,13 @@ internal class ScreenGripSystem(
         if (direction != 0) onViewTurn(direction * SceneControls.TURN_DEGREES)
     }
 
-    private fun restoreScreen() {
+    fun bringScreenToView() {
         screen.setComponent(Transform(ScreenPlacement.restore(viewerPose(), screen.getComponent<Transform>().transform)))
+        syncOverlays(force = true)
+    }
+
+    private fun restoreScreen() {
+        bringScreenToView()
         onScreenHiddenChange(false)
     }
 

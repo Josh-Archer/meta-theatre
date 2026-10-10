@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -65,6 +66,8 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val filter by model.librarySearchFilter.collectAsState()
     val keyboardOpen by model.librarySearchKeyboardOpen.collectAsState()
     val confirmSignOut by model.signOutConfirmation.collectAsState()
+    val earthOpen by model.earthControlsOpen.collectAsState()
+    val earthView by model.earthViewLabel.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
     }.collectAsState(initial = false)
@@ -74,6 +77,10 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, onPrimary = Color(0xFF1A1408))) {
         if (confirmSignOut) {
             SignOutPrompt(model)
+            return@MaterialTheme
+        }
+        if (earthOpen) {
+            EarthMenu(model, earthView)
             return@MaterialTheme
         }
         Column(
@@ -419,14 +426,35 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
         ) {}
         SceneControl.entries.forEachIndexed { index, control ->
             ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index])) {
-                val x = when (control) { SceneControl.TURN_LEFT -> .36f; SceneControl.TURN_RIGHT -> .52f; SceneControl.RETURN_MODELS -> .66f }
-                model.sceneControlPress(x, .96f)
+                model.sceneControlPress(SceneControls.center(control), .96f)
             }
         }
         ZoneButton(
             label = if (window.start < maxStart) "Next" else "",
             modifier = Modifier.fillMaxHeight().weight(1f - PosterGrid.NEXT_X),
         ) {}
+    }
+}
+
+@Composable
+private fun EarthMenu(model: TheatreModel, view: String) {
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Explore Earth", color = Ink, fontSize = 36.sp)
+            Text(view, color = Accent, fontSize = 24.sp)
+        }
+        EarthControls.rows.forEach { controls ->
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.ROW_HEIGHT).dp)) {
+                controls.forEach { control ->
+                    ZoneButton(control.label, Modifier.fillMaxHeight().weight(1f)) { model.earthControl(control) }
+                }
+            }
+        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
+                color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        }
     }
 }
 

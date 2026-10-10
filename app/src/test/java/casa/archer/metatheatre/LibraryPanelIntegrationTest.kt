@@ -107,6 +107,52 @@ class LibraryPanelIntegrationTest {
         }
     }
 
+    @Test fun earthMenuButtonsDriveActualObserverAndSpinStateWithoutLibrarySelections() {
+        val player = mock(ScreenPlayer::class.java)
+        `when`(player.transport).thenReturn(MutableStateFlow(Transport()))
+        val currentModel = TheatreModel(RuntimeEnvironment.getApplication(), player,
+            mock(PlexClient::class.java), Dispatchers.Unconfined)
+        model = currentModel
+        val exploration = EarthExploration()
+        val pressed = mutableListOf<EarthControl>()
+        currentModel.onEarthControl = { control ->
+            pressed.add(control)
+            exploration.apply(control, com.meta.spatial.core.Pose(EarthRenderer.SEAT_EYE.copy()))
+            currentModel.earthViewLabel.value = exploration.label()
+        }
+        compose.setContent { Box(Modifier.requiredSize(1600.dp, 900.dp)) { LibraryPanel(currentModel, player) } }
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val earth = compose.onNodeWithText("Earth").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { assertTrue(currentModel.sceneControlPress(earth.center.x / root.width, earth.center.y / root.height)) }
+        compose.onNodeWithText("Explore Earth").assertIsDisplayed()
+        compose.runOnIdle {
+            assertTrue(currentModel.earthOrbitScroll(1))
+            assertEquals(20f, exploration.longitude, 0f)
+            assertTrue(currentModel.earthOrbitScroll(-1))
+            assertEquals(0f, exploration.longitude, 0f)
+            pressed.clear()
+            assertTrue(currentModel.earthControlPress(.5f, .1f)) // menu heading cannot select a library item
+            assertTrue(pressed.isEmpty())
+        }
+        for (control in EarthControl.entries) {
+            val bounds = compose.onAllNodesWithText(control.label).fetchSemanticsNodes().last().boundsInRoot
+            compose.runOnIdle { assertTrue(currentModel.earthControlPress(bounds.center.x / root.width, bounds.center.y / root.height)) }
+            compose.waitForIdle()
+            if (control == EarthControl.NORTH_POLE) assertEquals(90f, exploration.latitude, 0f)
+            if (control == EarthControl.SOUTH_POLE) assertEquals(-90f, exploration.latitude, 0f)
+            if (control == EarthControl.FAR_SIDE) assertEquals(180f, exploration.longitude, 0f)
+            if (control == EarthControl.SPIN_RIGHT) assertEquals(0f, exploration.spin, 0f)
+        }
+        compose.runOnIdle {
+            assertEquals(EarthControl.entries.filter { it != EarthControl.DONE }, pressed)
+            assertFalse(currentModel.earthControlsOpen.value)
+            assertFalse(currentModel.earthOrbitScroll(1))
+            assertEquals(Browse.SignedOut, currentModel.browse.value)
+            assertEquals(com.meta.spatial.core.Pose(), exploration.worldFrame)
+        }
+        compose.onNodeWithText("Earth").assertIsDisplayed()
+    }
+
     private fun press(bounds: Rect, model: TheatreModel) {
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {

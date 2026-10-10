@@ -71,6 +71,9 @@ class TheatreModel(
 
     var onViewTurn: ((Float) -> Unit)? = null
     var onVisitorsReturn: (() -> Unit)? = null
+    internal var onEarthControl: ((EarthControl) -> Unit)? = null
+    val earthControlsOpen = MutableStateFlow(false)
+    val earthViewLabel = MutableStateFlow("Equator")
     var onScreenResize: ((Float) -> Unit)? = null
     var onQuietCinemaPreference: ((Boolean) -> Unit)? = null
     val quietCinemaEnabled = MutableStateFlow(state.quietCinemaEnabled)
@@ -107,6 +110,7 @@ class TheatreModel(
         onWatching = null
         onViewTurn = null
         onVisitorsReturn = null
+        onEarthControl = null
         onScreenResize = null
         onQuietCinemaPreference = null
         onPlayerInteraction = null
@@ -266,7 +270,24 @@ class TheatreModel(
             SceneControl.TURN_LEFT -> onViewTurn?.invoke(-SceneControls.TURN_DEGREES)
             SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
             SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
+            SceneControl.EARTH -> earthControlsOpen.value = true
         }
+        return true
+    }
+
+    internal fun earthControl(control: EarthControl) {
+        if (control == EarthControl.DONE) earthControlsOpen.value = false else onEarthControl?.invoke(control)
+    }
+
+    fun earthControlPress(x: Float, y: Float): Boolean {
+        if (!earthControlsOpen.value) return false
+        EarthControls.at(x, y)?.let(::earthControl)
+        return true
+    }
+
+    fun earthOrbitScroll(direction: Int): Boolean {
+        if (!earthControlsOpen.value) return false
+        if (direction != 0) earthControl(if (direction < 0) EarthControl.ORBIT_LEFT else EarthControl.ORBIT_RIGHT)
         return true
     }
 

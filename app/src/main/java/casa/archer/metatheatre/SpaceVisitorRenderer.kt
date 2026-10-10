@@ -18,13 +18,21 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
     private val entries = mutableListOf<Entry>()
     private val inspection = VisitorInspection()
     private val elapsedClock = PausableElapsedClock(clockMillis)
+    private var worldFrame = Pose()
+    private fun pose(visitor: SpaceVisitors.Visitor, progress: Double) = worldFrame * SpaceVisitors.pose(visitor, progress)
+    fun setWorldFrame(frame: Pose) {
+        if (worldFrame == frame) return
+        inspection.cancelGrab()
+        worldFrame = Pose(frame.t.copy(), frame.q.copy())
+        update()
+    }
 
     fun create() {
         elapsedClock.reset()
         for (visitor in SpaceVisitors.all) {
             val entity = Entity.create(
                 Mesh(visitor.asset.toUri(), hittable = MeshCollision.NoCollision),
-                Transform(SpaceVisitors.pose(visitor, 0.0)),
+                Transform(pose(visitor, 0.0)),
                 Scale(Vector3(visitor.displayScale, visitor.displayScale, visitor.displayScale)),
                 Visible(false),
             )
@@ -47,7 +55,7 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
                 android.util.Log.i("TheatreVisitors", "flyby ${entry.visitor.asset} visible=$show")
             }
             if (flight != null) {
-                val orbit = VisitorTarget(entry.visitor.asset, SpaceVisitors.pose(entry.visitor, p ?: .5),
+                val orbit = VisitorTarget(entry.visitor.asset, pose(entry.visitor, p ?: .5),
                     entry.visitor.displayScale, radius(entry.visitor))
                 val frame = flight.frame(orbit, now)
                 entry.entity.setComponent(Transform(frame.pose))
@@ -57,7 +65,7 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
                 entry.entity.setComponent(Transform(inspected.pose))
                 entry.entity.setComponent(Scale(Vector3(inspected.scale, inspected.scale, inspected.scale)))
             } else if (p != null) {
-                entry.entity.setComponent(Transform(SpaceVisitors.pose(entry.visitor, p)))
+                entry.entity.setComponent(Transform(pose(entry.visitor, p)))
                 val scale = entry.visitor.displayScale
                 entry.entity.setComponent(Scale(Vector3(scale, scale, scale)))
             }

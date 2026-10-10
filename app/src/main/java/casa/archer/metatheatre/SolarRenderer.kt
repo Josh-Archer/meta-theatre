@@ -39,6 +39,17 @@ class SolarRenderer(private val activity: TheatreActivity) {
     private val sunEntities = mutableListOf<Entity>()
     private var quietCinema = false
     private var lastSunDirection: Vector3? = null
+    private var worldFrame = Pose()
+    private val fixedBodies = mutableListOf<Pair<SolarSystem.Body, Entity>>()
+    private var starsEntity: Entity? = null
+
+    fun setWorldFrame(frame: Pose) {
+        if (worldFrame == frame) return
+        worldFrame = Pose(frame.t.copy(), frame.q.copy())
+        fixedBodies.forEach { (body, entity) -> entity.setComponent(Transform(worldFrame * Pose(body.center, body.rotation))) }
+        starsEntity?.setComponent(Transform(Pose(Vector3(0f, 0f, 0f), worldFrame.q)))
+        update()
+    }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
     suspend fun create() {
@@ -58,7 +69,8 @@ class SolarRenderer(private val activity: TheatreActivity) {
             setDepthWrite(DepthWrite.DISABLE)
             setDepthTest(DepthTest.ALWAYS)
         }
-        entity("stars", files.getValue("solar_stars"), stars, SolarSystem.STAR_RADIUS, Pose(Vector3(0f, 0f, 0f)))
+        starsEntity = entity("stars", files.getValue("solar_stars"), stars, SolarSystem.STAR_RADIUS,
+            Pose(Vector3(0f, 0f, 0f), worldFrame.q))
         for (body in SolarSystem.planets.filter { it.name != "earth" } + SolarSystem.moon) {
             val material = material("solar_surface", listOf("colorMap", "ringMap")).apply {
                 setTexture("colorMap", texture("${body.name}.jpg"))
@@ -66,8 +78,8 @@ class SolarRenderer(private val activity: TheatreActivity) {
                 setAttribute("parameters", Vector4(0f, if (body.name == "saturn") 1f else 0f, SolarSystem.RING_INNER, SolarSystem.RING_OUTER))
             }
             litMaterials.add(body to material)
-            val globe = entity(body.name, files.getValue("solar_body"), material, body.radius, Pose(body.center, body.rotation))
-            if (body.name == "moon") moonEntity = globe
+            val globe = entity(body.name, files.getValue("solar_body"), material, body.radius, worldFrame * Pose(body.center, body.rotation))
+            if (body.name == "moon") moonEntity = globe else fixedBodies.add(body to globe)
         }
         val saturn = SolarSystem.planets.first { it.name == "saturn" }
         val rings = material("solar_rings", listOf("ringMap"), transparent = true).apply {
@@ -77,14 +89,15 @@ class SolarRenderer(private val activity: TheatreActivity) {
             setDepthTest(DepthTest.LESS_OR_EQUAL)
         }
         litMaterials.add(saturn to rings)
-        entity("rings", files.getValue("solar_rings"), rings, saturn.radius, Pose(saturn.center, saturn.rotation))
+        fixedBodies.add(saturn to entity("rings", files.getValue("solar_rings"), rings, saturn.radius,
+            worldFrame * Pose(saturn.center, saturn.rotation)))
         val sun = material("solar_surface", listOf("colorMap", "ringMap")).apply {
             setTexture("colorMap", texture("sun.jpg"))
             setTexture("ringMap", ringTexture)
             setAttribute("parameters", Vector4(1f, 0f, 0f, 0f))
         }
         val corona = material("solar_corona", emptyList(), transparent = true).apply { setRenderOrder(30) }
-        val sunPosition = SolarSystem.sunPosition(Instant.now(), ZoneId.systemDefault())
+        val sunPosition = worldFrame * SolarSystem.sunPosition(Instant.now(), ZoneId.systemDefault())
         val sunPose = Pose(SolarSystem.sunDisplayPosition(sunPosition))
         val sunRadius = SolarSystem.sunDisplayRadius(sunPosition)
         sunEntities.add(entity("sun", files.getValue("solar_body"), sun, sunRadius, sunPose))
@@ -130,9 +143,10 @@ class SolarRenderer(private val activity: TheatreActivity) {
     }
 
     fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.sunPosition(instant, zone)
-        val moon = SolarSystem.moonAt(instant, position)
-        moonEntity?.setComponent(Transform(Pose(moon.center, moon.rotation)))
+        val canonicalSun = SolarSystem.sunPosition(instant, zone)
+        val position = worldFrame * canonicalSun
+        val moon = SolarSystem.moonAt(instant, canonicalSun)
+        moonEntity?.setComponent(Transform(worldFrame * Pose(moon.center, moon.rotation)))
         val shaderPosition = SolarSystem.shaderSunPosition(position)
         for ((_, material) in litMaterials) {
             material.setAttribute("sunPosition", shaderPosition)
@@ -176,5 +190,6 @@ class SolarRenderer(private val activity: TheatreActivity) {
         materials.forEach { it.destroy() }
         textures.forEach { it.destroy() }
         materials.clear(); textures.clear(); litMaterials.clear(); sunEntities.clear(); moonEntity = null
+        fixedBodies.clear(); starsEntity = null
     }
 }

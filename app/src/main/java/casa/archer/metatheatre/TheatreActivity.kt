@@ -84,6 +84,7 @@ class TheatreActivity : AppSystemActivity() {
     private var handLocomotion: HandMicrogestureLocomotionSystem? = null
     private var locomotionTargets: LocomotionTargets? = null
     private var immersiveFocused = false
+    private val earthExploration = EarthExploration()
     private var isdkSystem: IsdkSystem? = null
     private var videoReady = false
     private var videoWidth = EarthOrbit.screenWidth
@@ -106,6 +107,7 @@ class TheatreActivity : AppSystemActivity() {
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
+        model.onEarthControl = ::onEarthControl
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
         model.start()
@@ -145,16 +147,19 @@ class TheatreActivity : AppSystemActivity() {
 
         buildLocation(TheatreLocation.EARTH_ORBIT)
         spaceVisitorRenderer = SpaceVisitorRenderer().also {
+            it.setWorldFrame(earthExploration.worldFrame)
             it.create()
             it.setPaused(quietCinema.active)
         }
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
             earthRenderer = earth
+            earth.setExploration(earthExploration.worldFrame, earthExploration.spin)
             try {
                 earth.create()
                 val solar = SolarRenderer(this@TheatreActivity)
                 solarRenderer = solar
+                solar.setWorldFrame(earthExploration.worldFrame)
                 solar.create()
                 solar.setQuietCinema(quietCinema.active)
                 updateSolarEnvironment(force = true)
@@ -203,6 +208,8 @@ class TheatreActivity : AppSystemActivity() {
                 viewerPose = { scene.getViewerPose() },
                 visitors = spaceVisitorRenderer,
                 onViewTurn = ::turnView,
+                earthTarget = { earthRenderer?.target() },
+                onEarthSpin = ::spinEarth,
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
             )
             grip = system
@@ -308,6 +315,7 @@ class TheatreActivity : AppSystemActivity() {
         if (!immersiveFocused) {
             locomotionTargets?.show(false)
             spaceVisitorRenderer?.cancelGrab()
+            grip?.cancelEarthGrab()
         }
         // Resample civil time immediately after focus/visibility changes, including headset wake.
         updateSolarEnvironment(force = true)
@@ -321,6 +329,7 @@ class TheatreActivity : AppSystemActivity() {
     override fun onPause() {
         immersiveFocused = false
         spaceVisitorRenderer?.cancelGrab()
+        grip?.cancelEarthGrab()
         handLocomotion?.enableHandLocomotion(false)
         locomotionTargets?.show(false)
         model.saveCheckpoint()
@@ -488,7 +497,30 @@ class TheatreActivity : AppSystemActivity() {
     private fun turnView(degrees: Float) {
         if (!immersiveFocused) return
         spaceVisitorRenderer?.cancelGrab()
+        grip?.cancelEarthGrab()
         scene.updateViewOrigin(0f, degrees)
+    }
+
+    private fun spinEarth(degrees: Float) {
+        if (!immersiveFocused) return
+        earthExploration.spinBy(degrees)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
+    }
+
+    private fun onEarthControl(control: EarthControl) {
+        if (!immersiveFocused) return
+        grip?.cancelEarthGrab()
+        spaceVisitorRenderer?.cancelGrab()
+        if (control == EarthControl.HOME) {
+            scene.setViewOrigin(0f, 0f, 0f, 0f)
+            grip?.bringScreenToView()
+        }
+        earthExploration.apply(control, scene.getViewerPose())
+        model.earthViewLabel.value = earthExploration.label()
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
+        solarRenderer?.setWorldFrame(earthExploration.worldFrame)
+        spaceVisitorRenderer?.setWorldFrame(earthExploration.worldFrame)
+        updateSolarEnvironment(force = true)
     }
 
     private fun onScreenPress(xNorm: Float, yNorm: Float) {
@@ -501,6 +533,7 @@ class TheatreActivity : AppSystemActivity() {
             onMoviePress()
             return
         }
+        if (model.earthControlPress(x, y)) return
         if (model.sceneControlPress(x, y)) return
         if (model.librarySearchPress(x, y)) return
         val browse = model.browse.value
@@ -567,6 +600,7 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun onShelfScroll(delta: Int) {
+        if (model.earthOrbitScroll(delta)) return
         if (!model.libraryOpen.value) return
         val total = shelfSize(model.browse.value)
         val start = PosterGrid.window(total, model.page.value).start

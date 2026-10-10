@@ -53,6 +53,22 @@ The implementation uses Spatial SDK 0.14's `HandMicrogestureLocomotionSystem`.
 See [hand locomotion validation](art/validation/HAND_LOCOMOTION.md) for verification
 and the remaining checks on a Quest.
 
+## Explore Earth
+
+Open the library and choose **Earth** along its bottom edge. Choose **North Pole**,
+**South Pole**, **Equator**, or **Far side** to move around the globe. Earth stays
+ahead of you and your chair and screen stay with you. The orbit buttons move
+20 degrees around or 15 degrees toward a pole per press. A controller stick aimed
+at this menu also moves around the orbit. **Home seat** restores the original
+view and globe rotation; **Back to library** closes the menu.
+
+Point at exposed Earth outside the screen, hold an index/thumb pinch or controller
+trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
+**Spin left** and **Spin right** buttons turn it 15 degrees per press. Surface,
+clouds, and atmosphere rotate together, with the existing shared Sun illuminating
+the geography. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
+for automated checks and the remaining headset checks.
+
 ## Plex
 
 On the library panel, choose Link Plex. The headset shows a code. On your phone, open https://plex.tv/link and enter it. Pick a server if you have more than one, then a library, a show, a season, and an episode.
@@ -133,7 +149,8 @@ The local integration tests use Robolectric, Compose, and mock Plex HTTP servers
 to cover pagination, canceled navigation, search, playback intent, track
 selection, subtitle rendering, quiet-mode settings, scene-control hit regions,
 visitor capture/pull/rotation/release, and native-palm screen folding after a
-turn or recenter. These checks do not
+turn or recenter. Earth integration tests cover polar observer frames, spin
+gestures, panel occlusion, and shared lighting. These checks do not
 replace playback and hand/controller testing on an awake Quest.
 
 ## 3D assets
