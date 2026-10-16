@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -68,6 +69,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val confirmSignOut by model.signOutConfirmation.collectAsState()
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
+    val scenePickerOpen by model.scenePickerOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
     }.collectAsState(initial = false)
@@ -81,6 +83,10 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
         }
         if (earthOpen) {
             EarthMenu(model, earthView)
+            return@MaterialTheme
+        }
+        if (scenePickerOpen) {
+            ScenePickerMenu(model)
             return@MaterialTheme
         }
         Column(
@@ -454,6 +460,67 @@ private fun EarthMenu(model: TheatreModel, view: String) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
                 color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun ScenePickerMenu(model: TheatreModel) {
+    val currentLocation by model.currentLocation.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(
+            Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text("Select Environment", color = Ink, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text("Current: ${currentLocation.title}", color = Accent, fontSize = 24.sp)
+        }
+        Row(
+            Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            TheatreLocation.entries.forEach { location ->
+                val isSelected = location == currentLocation
+                Box(
+                    modifier = Modifier.fillMaxHeight().weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isSelected) Accent else Zone)
+                        .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Ink else Color.Transparent, RoundedCornerShape(16.dp))
+                        .semantics { role = Role.Button; onClick { model.selectLocation(location); true } },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        location.title,
+                        color = if (isSelected) Color(0xFF1A1408) else Ink,
+                        fontSize = 24.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    )
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            ZoneButton("Reset to default", Modifier.fillMaxHeight().weight(1f)) {
+                model.resetCurrentLocationToDefault()
+            }
+            ZoneButton("Back to library", Modifier.fillMaxHeight().weight(1f)) {
+                model.closeScenePicker()
+            }
+        }
+        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Seat position and screen settings are saved separately for each environment.\n" +
+                    "Use 'Reset to default' to restore the initial preset.",
+                color = Muted,
+                fontSize = 22.sp,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

@@ -74,6 +74,10 @@ class TheatreModel(
     internal var onEarthControl: ((EarthControl) -> Unit)? = null
     val earthControlsOpen = MutableStateFlow(false)
     val earthViewLabel = MutableStateFlow("Equator")
+    val scenePickerOpen = MutableStateFlow(false)
+    val currentLocation = MutableStateFlow(state.currentLocation)
+    var onLocationChanged: ((TheatreLocation) -> Unit)? = null
+    var onResetSceneSettings: ((TheatreLocation) -> Unit)? = null
     var onScreenResize: ((Float) -> Unit)? = null
     var onQuietCinemaPreference: ((Boolean) -> Unit)? = null
     val quietCinemaEnabled = MutableStateFlow(state.quietCinemaEnabled)
@@ -111,6 +115,8 @@ class TheatreModel(
         onViewTurn = null
         onVisitorsReturn = null
         onEarthControl = null
+        onLocationChanged = null
+        onResetSceneSettings = null
         onScreenResize = null
         onQuietCinemaPreference = null
         onPlayerInteraction = null
@@ -157,6 +163,8 @@ class TheatreModel(
 
     fun back() {
         if (signOutConfirmation.value) { cancelSignOut(); return }
+        if (scenePickerOpen.value) { closeScenePicker(); return }
+        if (earthControlsOpen.value) { earthControlsOpen.value = false; return }
         if (stack.size <= 1) return
         cancelBrowseWork()
         stack.removeLast()
@@ -271,6 +279,39 @@ class TheatreModel(
             SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
             SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
             SceneControl.EARTH -> earthControlsOpen.value = true
+            SceneControl.SCENES -> openScenePicker()
+        }
+        return true
+    }
+
+    fun openScenePicker() {
+        earthControlsOpen.value = false
+        scenePickerOpen.value = true
+    }
+
+    fun closeScenePicker() {
+        scenePickerOpen.value = false
+    }
+
+    fun selectLocation(location: TheatreLocation) {
+        currentLocation.value = location
+        state.saveLocation(location)
+        onLocationChanged?.invoke(location)
+    }
+
+    fun resetCurrentLocationToDefault() {
+        val loc = currentLocation.value
+        state.resetSceneSettings(loc)
+        onResetSceneSettings?.invoke(loc)
+    }
+
+    fun scenePickerPress(x: Float, y: Float): Boolean {
+        if (!scenePickerOpen.value) return false
+        when (val action = ScenePickerControls.at(x, y)) {
+            is ScenePickerAction.SelectLocation -> selectLocation(action.location)
+            ScenePickerAction.ResetDefault -> resetCurrentLocationToDefault()
+            ScenePickerAction.Done -> closeScenePicker()
+            null -> Unit
         }
         return true
     }
