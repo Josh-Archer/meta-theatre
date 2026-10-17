@@ -45,7 +45,7 @@ class PlayerBarIntegrationTest {
         `when`(player.transport).thenReturn(MutableStateFlow(Transport(
             title = "Movie", playWhenReady = true, playing = false,
             durationMs = 120_000, sourceWidth = 3840, sourceHeight = 2160,
-            videoWidth = 3840, videoHeight = 2160,
+            videoWidth = 3840, videoHeight = 2160, videoColor = "Dolby Vision",
         )))
         `when`(player.tracks).thenReturn(MutableStateFlow(PlaybackTracks(
             audio = listOf(PlaybackTrack("audio", "English")), selectedAudioId = "audio",
@@ -71,6 +71,7 @@ class PlayerBarIntegrationTest {
             assertTrue("Complete label $label", text.getLineEnd(text.lineCount - 1, visibleEnd = true) == label.length)
             node.fetchSemanticsNode().boundsInRoot
         }
+        compose.onNodeWithText("Input: Dolby Vision").assertIsDisplayed()
         for ((upper, lower) in buttonBounds.zipWithNext()) {
             assertTrue("Sidebar controls must not overlap", upper.bottom <= lower.top)
         }

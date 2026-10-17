@@ -13,6 +13,7 @@ import com.meta.spatial.runtime.AddressMode
 import com.meta.spatial.runtime.AlphaMode
 import com.meta.spatial.runtime.BlendMode
 import com.meta.spatial.runtime.DepthWrite
+import com.meta.spatial.runtime.DepthTest
 import com.meta.spatial.runtime.SamplerConfig
 import com.meta.spatial.runtime.SceneMaterial
 import com.meta.spatial.runtime.SceneMaterialAttribute
@@ -36,14 +37,16 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private val creators = mutableListOf<String>()
     private val entities = mutableListOf<Entity>()
     private var worldFrame = Pose()
+    private var skyFrame = Pose()
     private var spin = 0f
     private fun pose() = EarthExploration.renderPose(worldFrame, spin)
     internal fun target(): VisitorTarget? = if (entities.size != 3) null else
         VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
 
-    fun setExploration(frame: Pose, spinDegrees: Float) {
-        val moved = worldFrame != frame
+    fun setExploration(frame: Pose, spinDegrees: Float, lightingFrame: Pose) {
+        val moved = skyFrame != lightingFrame
         worldFrame = Pose(frame.t.copy(), frame.q.copy())
+        skyFrame = Pose(lightingFrame.t.copy(), lightingFrame.q.copy())
         spin = spinDegrees
         entities.forEach { it.setComponent(Transform(pose())) }
         if (moved) update()
@@ -110,6 +113,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
             *maps.map { SceneMaterialAttribute(it, SceneMaterialDataType.Texture2D) }.toTypedArray(),
         )
         return SceneMaterial.custom(shader, attributes, if (transparent) AlphaMode.TRANSLUCENT else AlphaMode.OPAQUE).apply {
+            setDepthTest(DepthTest.LESS_OR_EQUAL)
+            setDepthWrite(if (transparent) DepthWrite.DISABLE else DepthWrite.ENABLE)
             if (transparent) {
                 setBlendMode(BlendMode.TRANSLUCENT)
                 setDepthWrite(DepthWrite.DISABLE)
@@ -118,7 +123,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
     }
 
     fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.shaderSunPosition(worldFrame * SolarSystem.sunPosition(instant, zone))
+        val position = SolarSystem.shaderSunPosition(skyFrame * SolarSystem.sunPosition(instant, zone))
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 

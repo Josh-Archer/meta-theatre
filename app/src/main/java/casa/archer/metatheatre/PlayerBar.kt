@@ -86,7 +86,7 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.23f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.21f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(clock(transport.positionMs), color = Ink, fontSize = 28.sp)
                 Text(clock(transport.durationMs), color = Muted, fontSize = 28.sp)
@@ -112,7 +112,7 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             RailButton("−  Smaller", targets, PlayerControl.SMALLER, height = 70) { model.playerControl(PlayerControl.SMALLER) }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.32f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.34f), verticalArrangement = Arrangement.Center) {
             RailLabel("VIDEO QUALITY")
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -127,6 +127,10 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             Spacer(Modifier.height(12.dp))
             ResolutionRow("Playing", transport.videoWidth, transport.videoHeight)
             ResolutionRow("Source", transport.sourceWidth, transport.sourceHeight)
+            if (transport.videoColor.isNotBlank()) {
+                Text("Input: ${transport.videoColor}", color = Ink, fontSize = 26.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+            }
             val notice = movieQualityNotice(transport.quality, transport.sourceWidth, transport.sourceHeight,
                 transport.videoWidth, transport.videoHeight)
             Text(transport.detail.ifBlank { notice.ifBlank { transport.playbackMode } },

@@ -67,7 +67,9 @@ Point at exposed Earth outside the screen, hold an index/thumb pinch or controll
 trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
 **Spin left** and **Spin right** buttons turn it 15 degrees per press. Surface,
 clouds, and atmosphere rotate together, with the existing shared Sun illuminating
-the geography. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
+the geography. The visible hemisphere keeps the headset's local day/night cycle,
+including pole and far-side views. Distant planets keep their clear exhibit slots
+as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
 
 ## Plex
@@ -89,6 +91,14 @@ a 1080p compatibility transcode at 20 Mbps. The player bar shows the actual deco
 resolution and labels the 1080p fallback. Lower-resolution sources remain lower
 resolution. See [UHD playback validation](art/validation/UHD_PLAYBACK.md) for checks
 and the remaining headset validation.
+
+Movies use an opaque compositor layer with a direct decoder surface. The side
+menu's **Input** line reports the selected video's color metadata: Dolby Vision,
+HDR10/PQ, HLG, SDR, or unspecified. **Original** keeps the source stream and its
+HDR metadata; a Plex transcode can change the color format even at 4K. Decoding
+uses the headset's native codecs, with decoder fallback enabled. See
+[viewpoint and video validation](art/validation/VIEWPOINT_VIDEO_REPAIR.md) for the
+local Dolby Vision/HDR10 decoder checks and their limits.
 
 The player rail has **Audio** and **Subtitles** buttons that cycle available
 tracks; subtitles include an **Off** choice. Original playback uses supported

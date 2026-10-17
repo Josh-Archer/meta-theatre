@@ -15,6 +15,7 @@ import androidx.media3.common.text.Cue
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import java.util.Locale
@@ -33,6 +34,7 @@ data class Transport(
     val quality: PlaybackQuality = PlaybackQuality.ORIGINAL,
     val sourceWidth: Int = 0,
     val sourceHeight: Int = 0,
+    val videoColor: String = "",
 )
 
 /**
@@ -44,7 +46,7 @@ class ScreenPlayer internal constructor(
     context: Context,
     private val playerFactory: (Context, DefaultTrackSelector, DefaultDataSource.Factory) -> ExoPlayer =
         { appContext, selector, sourceFactory ->
-            ExoPlayer.Builder(appContext)
+            ExoPlayer.Builder(appContext, DefaultRenderersFactory(appContext).setEnableDecoderFallback(true))
                 .setTrackSelector(selector)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(appContext).setDataSourceFactory(sourceFactory))
                 .build()
@@ -71,6 +73,8 @@ class ScreenPlayer internal constructor(
     private var quality = PlaybackQuality.ORIGINAL
     private val trackCatalog = PlaybackTrackCatalog()
     private var pendingPlayWhenReady = true
+    @Volatile private var lastColorLabel = ""
+    @Volatile private var playbackGeneration = 0
 
     val transport = kotlinx.coroutines.flow.MutableStateFlow(Transport())
     val tracks: kotlinx.coroutines.flow.StateFlow<PlaybackTracks> = trackCatalog.tracks
@@ -100,6 +104,18 @@ class ScreenPlayer internal constructor(
                 setVideoSurface(surface)
                 setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                 addListener(listener)
+                setVideoFrameMetadataListener { _, _, format, _ ->
+                    val label = videoColorLabel(format)
+                    if (label != lastColorLabel) {
+                        lastColorLabel = label
+                        val generation = playbackGeneration
+                        appContext.mainExecutor.execute {
+                            if (generation != playbackGeneration || active == null) return@execute
+                            transport.value = transport.value.copy(videoColor = label)
+                            Log.i(TAG, "selected video color $label")
+                        }
+                    }
+                }
             }
         player = created
         pending?.let {
@@ -352,6 +368,8 @@ class ScreenPlayer internal constructor(
     }
 
     fun close() {
+        playbackGeneration++
+        lastColorLabel = ""
         player?.pause()
         active = null
         pending = null
@@ -369,6 +387,8 @@ class ScreenPlayer internal constructor(
     }
 
     fun release() {
+        playbackGeneration++
+        lastColorLabel = ""
         player?.release()
         player = null
         trackSelector = null
@@ -383,6 +403,8 @@ class ScreenPlayer internal constructor(
         positionMs: Long = 0L,
         playWhenReady: Boolean = true,
     ) {
+        playbackGeneration++
+        lastColorLabel = ""
         subtitleCues.value = emptyList()
         trackSelector?.let { selector ->
             selector.setParameters(selector.parameters.buildUpon()

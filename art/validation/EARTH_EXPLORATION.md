@@ -1,5 +1,10 @@
 # Earth exploration — 2026-10-09
 
+The 2026-10-17 [viewpoint repair](VIEWPOINT_VIDEO_REPAIR.md) supersedes the shared
+environment transform below: distant exhibit slots and civil-time lighting now
+follow the seated view while the Earth frame selects geography. This prevents
+planet overlap and loss of the visible night cycle at new viewpoints.
+
 The library's Earth menu adds geographic viewpoints and manual globe rotation.
 Existing runtime geometry, textures, and shader detail are preserved.
 

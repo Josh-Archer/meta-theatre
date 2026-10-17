@@ -110,7 +110,9 @@ class TheatreActivity : AppSystemActivity() {
         model.onEarthControl = ::onEarthControl
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
-        model.start()
+        // Local decoder fixtures must not race account restoration or make Plex requests.
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_video", false)) model.start()
         ticker = scope.launch {
             screenPlayer.transport.map { it.playing }.distinctUntilChanged().collectLatest { playing ->
                 if (playing) {
@@ -123,6 +125,7 @@ class TheatreActivity : AppSystemActivity() {
         }
     }
 
+    @OptIn(com.meta.spatial.core.SpatialSDKExperimentalAPI::class)
     override fun onSceneReady() {
         super.onSceneReady()
         scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
@@ -132,6 +135,7 @@ class TheatreActivity : AppSystemActivity() {
         // The distant Sun is projected inside the sky; keep close chair/panel depth precision.
         scene.setDepthParams(SolarSystem.NEAR_CLIP, SolarSystem.FAR_CLIP)
         scene.enableHolePunching(true)
+        scene.setColorSpace(com.meta.spatial.runtime.Scene.ColorSpace.REC709)
         scene.setLightingEnvironment(
             ambientColor = Vector3(0.06f, 0.07f, 0.09f),
             sunColor = Vector3(1.4f, 1.32f, 1.15f),
@@ -147,19 +151,19 @@ class TheatreActivity : AppSystemActivity() {
 
         buildLocation(TheatreLocation.EARTH_ORBIT)
         spaceVisitorRenderer = SpaceVisitorRenderer().also {
-            it.setWorldFrame(earthExploration.worldFrame)
+            it.setWorldFrame(earthExploration.skyFrame)
             it.create()
             it.setPaused(quietCinema.active)
         }
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
             earthRenderer = earth
-            earth.setExploration(earthExploration.worldFrame, earthExploration.spin)
+            earth.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
             try {
                 earth.create()
                 val solar = SolarRenderer(this@TheatreActivity)
                 solarRenderer = solar
-                solar.setWorldFrame(earthExploration.worldFrame)
+                solar.setWorldFrame(earthExploration.skyFrame)
                 solar.create()
                 solar.setQuietCinema(quietCinema.active)
                 updateSolarEnvironment(force = true)
@@ -238,8 +242,9 @@ class TheatreActivity : AppSystemActivity() {
         ensureVideo()
         val uri = fixture.toURI().toString()
         screenPlayer.play(Playable(
-            "4K display test", uri, uri, emptyMap(), "Local test pattern",
-            sourceWidth = 3840, sourceHeight = 2160,
+            intent.getStringExtra("metatheatre.test_label") ?: "4K display test", uri, uri, emptyMap(), "Local test fixture",
+            sourceWidth = intent.getIntExtra("metatheatre.test_width", 3840).coerceIn(1, 8192),
+            sourceHeight = intent.getIntExtra("metatheatre.test_height", 2160).coerceIn(1, 8192),
         ))
         model.libraryOpen.value = false
         applyWatching(true)
@@ -397,8 +402,7 @@ class TheatreActivity : AppSystemActivity() {
                             super.applyTo(options)
                             // Clear the scene at the video quad so its full-resolution underlay is visible.
                             // Mesh controls and the pointer can still draw in front of it.
-                            options.alphaMode = AlphaMode.HOLE_PUNCH
-                            options.panelShader = SceneMaterial.HOLE_PUNCH_PANEL_SHADER
+                            VideoPresentation.configure(options)
                         }
                     },
                 )
@@ -512,7 +516,7 @@ class TheatreActivity : AppSystemActivity() {
     private fun spinEarth(degrees: Float) {
         if (!immersiveFocused) return
         earthExploration.spinBy(degrees)
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
     }
 
     private fun onEarthControl(control: EarthControl) {
@@ -525,9 +529,9 @@ class TheatreActivity : AppSystemActivity() {
         }
         earthExploration.apply(control, scene.getViewerPose())
         model.earthViewLabel.value = earthExploration.label()
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
-        solarRenderer?.setWorldFrame(earthExploration.worldFrame)
-        spaceVisitorRenderer?.setWorldFrame(earthExploration.worldFrame)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
+        solarRenderer?.setWorldFrame(earthExploration.skyFrame)
+        spaceVisitorRenderer?.setWorldFrame(earthExploration.skyFrame)
         updateSolarEnvironment(force = true)
     }
 

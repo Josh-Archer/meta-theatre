@@ -124,6 +124,8 @@ class SolarRenderer(private val activity: TheatreActivity) {
             SceneMaterialAttribute("parameters", SceneMaterialDataType.Vector4),
             *maps.map { SceneMaterialAttribute(it, SceneMaterialDataType.Texture2D) }.toTypedArray(),
         ), if (transparent) AlphaMode.TRANSLUCENT else AlphaMode.OPAQUE).apply {
+            setDepthTest(DepthTest.LESS_OR_EQUAL)
+            setDepthWrite(if (transparent) DepthWrite.DISABLE else DepthWrite.ENABLE)
             setAttribute("sunPosition", Vector4(0f, 0f, 1f, 0f))
             setAttribute("parameters", Vector4(0f, 0f, 0f, 0f))
             if (transparent) {

@@ -6,6 +6,8 @@ import com.meta.spatial.core.Vector3
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.roundToInt
+import java.time.Instant
+import java.time.ZoneId
 
 internal enum class EarthControl(val label: String) {
     NORTH_POLE("North Pole"), SOUTH_POLE("South Pole"), EQUATOR("Equator"), FAR_SIDE("Far side"),
@@ -30,6 +32,8 @@ internal class EarthExploration {
     var spin = 0f; private set
     val distance = (EarthRenderer.SEAT_EYE - EarthRenderer.CENTER).length()
     var worldFrame = Pose(); private set
+    // Distant exhibit slots and the civil-time Sun follow the seated view, not the globe's latitude.
+    var skyFrame = Pose(); private set
 
     fun apply(control: EarthControl, viewer: Pose) {
         when (control) {
@@ -44,15 +48,17 @@ internal class EarthExploration {
             EarthControl.SPIN_LEFT -> { spinBy(-15f * screenSpinDirection(viewer)); return }
             EarthControl.SPIN_RIGHT -> { spinBy(15f * screenSpinDirection(viewer)); return }
             EarthControl.DONE -> return
-            EarthControl.HOME -> { latitude = 0f; longitude = 0f; spin = 0f; worldFrame = Pose(); return }
+            EarthControl.HOME -> { latitude = 0f; longitude = 0f; spin = 0f; worldFrame = Pose(); skyFrame = Pose(); return }
         }
         val yaw = viewer.q.removePitchAndRoll()
         val anchor = Pose(viewer.t - yaw * EarthRenderer.SEAT_EYE, yaw)
+        skyFrame = anchor
         worldFrame = anchor * observerFrame()
     }
 
     fun spinBy(degrees: Float) { if (degrees.isFinite()) spin = wrap(spin + degrees) }
     fun earthPose() = renderPose(worldFrame, spin)
+    fun sunPosition(instant: Instant, zone: ZoneId) = skyFrame * SolarSystem.sunPosition(instant, zone)
     private fun screenSpinDirection(viewer: Pose): Float {
         val earth = earthPose()
         val upperSurface = ((viewer.t - earth.t).normalize() + Vector3(0f, .5f, 0f)).normalize()
