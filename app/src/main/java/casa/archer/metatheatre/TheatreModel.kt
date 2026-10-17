@@ -83,6 +83,7 @@ class TheatreModel(
     val quietCinemaEnabled = MutableStateFlow(state.quietCinemaEnabled)
     var onPlayerInteraction: (() -> Unit)? = null
     internal val playerHitTargets = PlayerHitTargets()
+    internal val panelCursor = MutableStateFlow<PanelCursor?>(null)
     internal val seekPreview = MutableStateFlow<Float?>(null)
 
     private val scope = CoroutineScope(
@@ -110,6 +111,7 @@ class TheatreModel(
         cancelBrowseWork()
         player.onProgress = null
         scope.cancel()
+        panelCursor.value = null
         onPrepareScreen = null
         onWatching = null
         onViewTurn = null

@@ -54,6 +54,16 @@ private val Outline = Color(0xFF3A465A)
 @Composable
 fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
     val open by model.playerControlsOpen.collectAsState()
+    val hidden by model.screenHidden.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        PlayerContent(model, player)
+        PanelReticle(model, PointerPanel.PLAYER, open && !hidden)
+    }
+}
+
+@Composable
+private fun PlayerContent(model: TheatreModel, player: ScreenPlayer) {
+    val open by model.playerControlsOpen.collectAsState()
     val alpha by animateFloatAsState(
         targetValue = if (open) 1f else 0f,
         animationSpec = tween(PlayerAutoHide.SLIDE_MS.toInt()),

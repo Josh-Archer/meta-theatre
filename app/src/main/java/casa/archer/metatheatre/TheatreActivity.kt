@@ -221,6 +221,7 @@ class TheatreActivity : AppSystemActivity() {
                 panel, ::onScreenPress, ::onShelfScroll,
                 onPlayerVisibility = { model.playerControlsOpen.value = it },
                 playerTargets = model.playerHitTargets,
+                onPanelCursor = { model.panelCursor.value = it },
                 onPlayerControl = { control -> scope.launch { model.playerControl(control) } },
                 onSeek = { delta -> scope.launch { model.seekBy(delta) } },
                 onSeekPreview = { model.seekPreview.value = it },
@@ -459,7 +460,7 @@ class TheatreActivity : AppSystemActivity() {
                     style = object : PanelStyleOptions(themeResourceId = R.style.PlayerPanelTheme) {
                         override fun applyTo(options: PanelConfigOptions) {
                             super.applyTo(options)
-                            options.alphaMode = AlphaMode.TRANSLUCENT
+                            PanelPresentation.configure(options)
                         }
                     },
                     display = DpDisplayOptions(
@@ -522,7 +523,7 @@ class TheatreActivity : AppSystemActivity() {
                     style = object : PanelStyleOptions(themeResourceId = R.style.PanelTheme) {
                         override fun applyTo(options: PanelConfigOptions) {
                             super.applyTo(options)
-                            options.alphaMode = AlphaMode.TRANSLUCENT
+                            PanelPresentation.configure(options)
                         }
                     },
                     display = DpDisplayOptions(width = 1600f, height = 900f, dpi = 160),

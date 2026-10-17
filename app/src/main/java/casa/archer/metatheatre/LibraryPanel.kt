@@ -58,6 +58,16 @@ private val Zone = Color(0xFF2A3342)
 
 @Composable
 fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
+    val libraryOpen by model.libraryOpen.collectAsState()
+    val hidden by model.screenHidden.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        LibraryContent(model, player)
+        PanelReticle(model, PointerPanel.LIBRARY, libraryOpen && !hidden)
+    }
+}
+
+@Composable
+private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
     val browse by model.browse.collectAsState()
     val loading by model.loading.collectAsState()
     val error by model.error.collectAsState()

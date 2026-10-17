@@ -91,6 +91,11 @@ locations on disk. See [weather authoring and validation](art/WEATHER.md).
 
 On the library panel, choose Link Plex. The headset shows a code. On your phone, open https://plex.tv/link and enter it. Pick a server if you have more than one, then a library, a show, a season, and an episode.
 
+The selector and movie side menu have solid backings so the environment cannot
+show through. A white ring with a black outline and gold center marks the hand or
+controller ray on their controls. The grab frame remains available during movies.
+See [panel visibility checks](art/validation/PANEL_VISIBILITY.md).
+
 The search row searches the current shelf. Point at **Search titles** to open the
 on-panel keyboard, enter a title, then choose **Done**. Movie, TV, and Continue
 filters narrow the results; **Clear** restores the full shelf. Large libraries

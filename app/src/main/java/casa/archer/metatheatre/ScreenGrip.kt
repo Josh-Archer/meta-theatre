@@ -9,6 +9,7 @@ import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.Query
 import com.meta.spatial.core.SystemBase
+import com.meta.spatial.core.Vector2
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.isdk.IsdkPanelDimensions
 import com.meta.spatial.isdk.IsdkPanelResize
@@ -23,6 +24,8 @@ import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Scale
 import com.meta.spatial.toolkit.Sphere
+import com.meta.spatial.toolkit.Quad
+import com.meta.spatial.runtime.AlphaMode
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.Visible
 import kotlin.math.abs
@@ -62,6 +65,7 @@ internal class ScreenGripSystem(
     private val onPause: () -> Unit = {},
     private val mediaActive: () -> Boolean = { false },
     private val hasSubtitleCues: () -> Boolean = { false },
+    private val onPanelCursor: (PanelCursor?) -> Unit = {},
 ) : SystemBase() {
     var watching: Boolean = false
         set(value) {
@@ -139,6 +143,25 @@ internal class ScreenGripSystem(
         Visible(false),
     )
 
+    private fun opaqueBacking() = Entity.create(
+        Mesh("mesh://quad".toUri(), hittable = MeshCollision.NoCollision),
+        Quad(min = Vector2(-.5f,-.5f), max = Vector2(.5f,.5f)),
+        Material().apply {
+            baseColor = Color4(.006f,.008f,.012f,1f)
+            unlit = true
+            alphaMode = AlphaMode.OPAQUE.mode
+        }, Transform(Pose()), Visible(false),
+    )
+    private val libraryBacking = opaqueBacking()
+    private val playerBacking = opaqueBacking()
+    private var lastLibraryBacking: PanelBackingState? = null
+    private var lastPlayerBacking: PanelBackingState? = null
+    private fun applyBacking(entity: Entity, state: PanelBackingState) {
+        entity.setComponent(Transform(state.pose))
+        entity.setComponent(Scale(Vector3(state.size.width,state.size.height,1f)))
+        entity.setComponent(Visible(state.visible))
+    }
+
     override fun execute() {
         try {
             step()
@@ -205,12 +228,18 @@ internal class ScreenGripSystem(
     }
 
     fun syncOverlays(force: Boolean = false) {
-        val overlays = overlays ?: return
         val pose = runCatching { screen.getComponent<Transform>().transform }.getOrNull() ?: return
         val size = screenSize()
         val width = size.width
         val height = size.height
         val fraction = visibilityMotion.fraction(SystemClock.uptimeMillis())
+        val backing = PanelPresentation.libraryBacking(pose,size,watching,fraction)
+        if (force || backing != lastLibraryBacking) {
+            applyBacking(libraryBacking,backing)
+            if (lastLibraryBacking?.visible != backing.visible) Log.i(TAG,"selector opaque backing visible=${backing.visible}")
+            lastLibraryBacking = backing
+        }
+        val overlays = overlays ?: return
         val geometryChanged = force || lastPresentationFraction != fraction || lastOverlays !== overlays || lastOverlayPose != pose ||
             lastOverlayWidth != width || lastOverlayHeight != height || lastWatching != watching || lastScreenHidden != screenHidden
         val subtitlesVisible = watching && !screenHidden && hasSubtitleCues()
@@ -243,6 +272,13 @@ internal class ScreenGripSystem(
             .plus(forward.times(barShift))
         overlays.player.setComponent(Transform(Pose(barCenter, pose.q)))
         overlays.player.setComponent(Visible(show && !screenHidden && playerFraction > 0.001f))
+        val railBacking = PanelPresentation.backing(Pose(barCenter,pose.q),ScreenSize(Stage.PLAYER_WIDTH,Stage.PLAYER_HEIGHT),
+            show && !screenHidden && playerFraction > .001f)
+        if (force || railBacking != lastPlayerBacking) {
+            applyBacking(playerBacking,railBacking)
+            if (lastPlayerBacking?.visible != railBacking.visible) Log.i(TAG,"side menu opaque backing visible=${railBacking.visible}")
+            lastPlayerBacking = railBacking
+        }
         lastPresentationFraction = fraction
         lastOverlays = overlays
         // SDK poses and vectors are mutable; retain independent values for comparison.
@@ -313,6 +349,9 @@ internal class ScreenGripSystem(
         revealMotion.retain(ids)
 
         var hovered: Aim? = sceneHover?.let { Aim(false, .5f, .5f, it.distance, it.point, it.normal) }
+        var panelHover: PanelCursor? = null
+        var panelDistance = Float.POSITIVE_INFINITY
+        var cursorOrigin: Vector3? = null
         var libraryScroll = 0
         val handAims = mutableMapOf<Long, Aim>()
         val hands = mutableListOf<HandInput>()
@@ -370,11 +409,23 @@ internal class ScreenGripSystem(
                         is PlayerTarget.Button -> if (target == selected) onPlayerControl(selected.control)
                     }
                 }
-                if (onRail && (hovered == null || rail!!.distance < hovered.distance)) hovered = rail
+                if (onRail && rail!!.distance < panelDistance) {
+                    panelHover = PanelCursor(PointerPanel.PLAYER,rail.xNorm,rail.yNorm)
+                    panelDistance = rail.distance
+                }
+                if (onRail && (hovered == null || rail!!.distance < hovered.distance)) {
+                    hovered = rail; cursorOrigin = pose.t
+                }
             }
 
             val aimed = aim(pose)
-            if (aimed != null && (!watching || aimed.onFace) && (hovered == null || aimed.distance < hovered.distance)) hovered = aimed
+            if (aimed != null && (!watching || aimed.onFace) && (hovered == null || aimed.distance < hovered.distance)) {
+                hovered = aimed; cursorOrigin = pose.t
+            }
+            if (!watching && aimed?.onFace == true && aimed.distance < panelDistance) {
+                panelHover = PanelCursor(PointerPanel.LIBRARY,aimed.xNorm,aimed.yNorm)
+                panelDistance = aimed.distance
+            }
             if (isHand) {
                 if (aimed?.onFace == true) handAims[id] = aimed
                 val screenPose = screen.getComponent<Transform>().transform
@@ -443,7 +494,8 @@ internal class ScreenGripSystem(
         for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
         if (!watching && !screenHidden && libraryScroll != 0) onScroll(libraryScroll)
         if (!navigating) processOpenHands(inputs, now, sceneOwned.isNotEmpty() || sdkManipulating)
-        placeCursor(hovered?.takeIf { interactive || sceneHover != null })
+        onPanelCursor(panelHover?.takeIf { interactive })
+        placeCursor(hovered?.takeIf { interactive || sceneHover != null },cursorOrigin)
     }
 
     private fun processOpenHands(inputs: List<TrackedInput>, now: Long, visitorOwned: Boolean) {
@@ -558,7 +610,7 @@ internal class ScreenGripSystem(
         return Scale(Vector3(x, y, 1f))
     }
 
-    private fun placeCursor(aim: Aim?) {
+    private fun placeCursor(aim: Aim?, origin: Vector3?) {
         val visible = aim != null
         if (visible != cursorVisible) {
             cursor.setComponent(Visible(visible))
@@ -569,7 +621,8 @@ internal class ScreenGripSystem(
         }
         val scale = (aim.distance * .12f).coerceIn(.5f, 70f)
         cursor.setComponent(Scale(Vector3(scale, scale, scale)))
-        cursor.setComponent(Transform(Pose(aim.point.plus(aim.normal.times(0.03f)))))
+        val eyeSide = origin ?: viewerPose().t
+        cursor.setComponent(Transform(Pose(PanelPresentation.cursorPosition(aim.point,eyeSide))))
     }
 
     private fun move(grab: Grab, controller: Controller, pose: Pose) {
