@@ -72,6 +72,18 @@ including pole and far-side views. Distant planets keep their clear exhibit slot
 as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
 
+Open **Explore Earth → Weather settings → Live weather: On** to apply current
+weather to the hemisphere you are viewing. It starts off and saves your choice
+on the headset. Orbiting or spinning Earth selects a new region after the view
+settles; weather refreshes every 15 minutes while the app has focus. **Refresh**
+requests an update; **Off** restores the original cloud map.
+
+Cloud coverage and weather codes come from Open-Meteo. The cloud shapes are
+modeled representations of those conditions, not satellite imagery. The weather
+panel shows the model time and labels offline data. Only viewed coordinates are
+sent to the provider; the app does not request GPS permission or store weather
+locations on disk. See [weather authoring and validation](art/WEATHER.md).
+
 ## Plex
 
 On the library panel, choose Link Plex. The headset shows a code. On your phone, open https://plex.tv/link and enter it. Pick a server if you have more than one, then a library, a show, a season, and an episode.

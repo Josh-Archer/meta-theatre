@@ -77,6 +77,7 @@ class TheatreActivity : AppSystemActivity() {
     private var solarRenderer: SolarRenderer? = null
     private var spaceVisitorRenderer: SpaceVisitorRenderer? = null
     private val solarUpdateSchedule = EarthUpdateSchedule()
+    private val weatherViewSchedule = EarthUpdateSchedule()
     private var earthLoad: Job? = null
     private var screen: Entity? = null
     private var grip: ScreenGripSystem? = null
@@ -85,6 +86,14 @@ class TheatreActivity : AppSystemActivity() {
     private var locomotionTargets: LocomotionTargets? = null
     private var immersiveFocused = false
     private val earthExploration = EarthExploration()
+    private val weather by lazy {
+        WeatherSession(scope, OpenMeteoWeather(),
+            render = { snapshot ->
+                earthRenderer?.setWeather(snapshot)
+                if (snapshot != null) Log.i("Weather", "Current orbital weather applied; cells=${snapshot.readings.size}")
+            },
+            publish = { value -> model.weatherUi.value = value })
+    }
     private var isdkSystem: IsdkSystem? = null
     private var videoReady = false
     private var videoWidth = EarthOrbit.screenWidth
@@ -108,11 +117,22 @@ class TheatreActivity : AppSystemActivity() {
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onEarthControl = ::onEarthControl
+        model.onWeatherEnabled = weather::setEnabled
+        model.onWeatherRefresh = weather::refresh
+        weather.setEnabled(model.state.liveWeatherEnabled)
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
         // Local decoder fixtures must not race account restoration or make Plex requests.
-        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
-            !intent.getBooleanExtra("metatheatre.test_video", false)) model.start()
+        val debugWeather = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            intent.getBooleanExtra("metatheatre.test_weather", false)
+        if (!debugWeather && (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_video", false))) model.start()
+        if (debugWeather) {
+            // In-memory diagnostic opt-in; never changes the user's saved weather or Plex session.
+            model.openEarthControls()
+            model.weatherSettingsOpen.value = true
+            weather.setEnabled(true)
+        }
         ticker = scope.launch {
             screenPlayer.transport.map { it.playing }.distinctUntilChanged().collectLatest { playing ->
                 if (playing) {
@@ -319,6 +339,7 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSessionStateChanged(state: SessionState) {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
+        weather.setActive(immersiveFocused)
         handLocomotion?.enableHandLocomotion(immersiveFocused)
         if (!immersiveFocused) {
             locomotionTargets?.show(false)
@@ -336,6 +357,7 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onPause() {
         immersiveFocused = false
+        weather.setActive(false)
         spaceVisitorRenderer?.cancelGrab()
         grip?.cancelEarthGrab()
         handLocomotion?.enableHandLocomotion(false)
@@ -371,6 +393,10 @@ class TheatreActivity : AppSystemActivity() {
         // A solar cycle changes by only 0.0042 degrees per second; no frame-rate updates needed.
         updateSolarEnvironment()
         spaceVisitorRenderer?.update()
+        if (immersiveFocused && model.weatherUi.value.enabled && earthRenderer?.target() != null &&
+            weatherViewSchedule.shouldUpdate(SystemClock.uptimeMillis())) {
+            weather.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t))
+        }
     }
 
     private fun updateSolarEnvironment(force: Boolean = false) {
@@ -545,6 +571,7 @@ class TheatreActivity : AppSystemActivity() {
             onMoviePress()
             return
         }
+        if (model.weatherControlPress(x, y)) return
         if (model.earthControlPress(x, y)) return
         if (model.sceneControlPress(x, y)) return
         if (model.librarySearchPress(x, y)) return

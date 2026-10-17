@@ -39,6 +39,10 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private var worldFrame = Pose()
     private var skyFrame = Pose()
     private var spin = 0f
+    private var cloudMaterial: SceneMaterial? = null
+    private var originalCloudTexture: SceneTexture? = null
+    private var weatherTexture: SceneTexture? = null
+    private var weatherMap: WeatherCloudMap? = null
     private fun pose() = EarthExploration.renderPose(worldFrame, spin)
     internal fun target(): VisitorTarget? = if (entities.size != 3) null else
         VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
@@ -86,7 +90,9 @@ class EarthRenderer(private val activity: TheatreActivity) {
         surface.setTexture("normalMap", gpuMaps.getValue("normal.jpg"))
         surface.setTexture("oceanMap", gpuMaps.getValue("ocean.jpg"))
         val clouds = material("earth_clouds", listOf("cloudMap"), transparent = true)
-        clouds.setTexture("cloudMap", gpuMaps.getValue("clouds.png"))
+        originalCloudTexture = gpuMaps.getValue("clouds.png")
+        cloudMaterial = clouds
+        clouds.setTexture("cloudMap", originalCloudTexture!!)
         val atmosphere = material("earth_atmosphere", emptyList(), transparent = true)
         clouds.setRenderOrder(10)
         atmosphere.setRenderOrder(20)
@@ -105,6 +111,21 @@ class EarthRenderer(private val activity: TheatreActivity) {
             ))
         }
         Log.i("Earth", "Dynamic Earth ready; local zone=${ZoneId.systemDefault()}, centered at equator/100W")
+    }
+
+    internal suspend fun setWeather(snapshot: WeatherSnapshot?) {
+        val cloud = cloudMaterial ?: return
+        val bitmap = if (snapshot == null) null else withContext(Dispatchers.Default) {
+            val map = weatherMap ?: WeatherCloudMap.load(activity.assets).also { weatherMap = it }
+            map.build(snapshot)
+        }
+        val next = try {
+            bitmap?.let { SceneTexture(it, SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)) }
+        } finally { bitmap?.recycle() }
+        cloud.setTexture("cloudMap", next ?: checkNotNull(originalCloudTexture))
+        val previous = weatherTexture
+        weatherTexture = next
+        previous?.destroy()
     }
 
     private fun material(shader: String, maps: List<String>, transparent: Boolean = false): SceneMaterial {
@@ -134,6 +155,9 @@ class EarthRenderer(private val activity: TheatreActivity) {
 
     /** Called after Spatial SDK shuts down its scene and cached meshes. */
     fun release() {
+        cloudMaterial = null
+        weatherTexture?.destroy(); weatherTexture = null
+        weatherMap = null
         materials.forEach { it.destroy() }
         textures.forEach { it.destroy() }
         entities.clear()

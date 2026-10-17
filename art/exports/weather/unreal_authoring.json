@@ -1,0 +1,11 @@
+{
+  "imported": 17,
+  "materials": 9,
+  "texture": [
+    4096,
+    2048
+  ],
+  "folder": "/Game/MetaTheatre/Weather",
+  "open_level_preserved": true,
+  "runtime": "Native Android Earth cloud shader consumes the shared authored density atlas."
+}

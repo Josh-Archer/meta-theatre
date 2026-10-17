@@ -69,6 +69,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val confirmSignOut by model.signOutConfirmation.collectAsState()
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
+    val weatherOpen by model.weatherSettingsOpen.collectAsState()
     val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
@@ -85,6 +86,10 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
         }
         if (confirmSignOut) {
             SignOutPrompt(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && weatherOpen) {
+            WeatherMenu(model)
             return@MaterialTheme
         }
         if (earthOpen) {
@@ -447,10 +452,15 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
 @Composable
 private fun EarthMenu(model: TheatreModel, view: String) {
     Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
-        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("Explore Earth", color = Ink, fontSize = 36.sp)
-            Text(view, color = Accent, fontSize = 24.sp)
+        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp)) {
+            Column(Modifier.fillMaxHeight().weight(.72f), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                Text("Explore Earth", color = Ink, fontSize = 36.sp)
+                Text(view, color = Accent, fontSize = 24.sp)
+            }
+            ZoneButton("Weather settings", Modifier.fillMaxHeight().weight(.28f)) {
+                model.weatherSettingsOpen.value = true
+            }
         }
         EarthControls.rows.forEach { controls ->
             Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.ROW_HEIGHT).dp)) {
@@ -462,6 +472,38 @@ private fun EarthMenu(model: TheatreModel, view: String) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
                 color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun WeatherMenu(model: TheatreModel) {
+    val weather by model.weatherUi.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Earth weather", color = Ink, fontSize = 36.sp)
+            Text("Follows the place on Earth you’re viewing", color = Accent, fontSize = 26.sp)
+        }
+        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.ROW).dp)) {
+            WeatherControl.entries.forEach { control ->
+                val label = if (control == WeatherControl.TOGGLE) "Live weather: ${if (weather.enabled) "On" else "Off"}" else control.label
+                ZoneButton(label, Modifier.fillMaxHeight().weight(1f), highlighted = control == WeatherControl.TOGGLE && weather.enabled) {
+                    model.weatherControl(control)
+                }
+            }
+        }
+        Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text(weather.message, color = if (weather.stale) Accent else Ink, fontSize = 30.sp)
+            weather.place?.let { Text(it.label(), color = Ink, fontSize = 28.sp) }
+            weather.reading?.let { reading ->
+                Text("${reading.pattern.title} · ${reading.cloudCover}% cloud · ${kotlin.math.round(reading.temperature).toInt()}°C", color = Ink, fontSize = 28.sp)
+                val time = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm z", java.util.Locale.US)
+                    .withZone(java.time.ZoneId.systemDefault()).format(reading.time)
+                Text("Model time: $time", color = Muted, fontSize = 26.sp)
+            }
+            Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nRain, snow and storms are represented by their cloud shapes.", color = Muted, fontSize = 26.sp)
+            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. No headset location permission is used.", color = Muted, fontSize = 24.sp)
         }
     }
 }
