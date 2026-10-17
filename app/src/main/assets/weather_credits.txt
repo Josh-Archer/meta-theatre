@@ -11,3 +11,9 @@ The original offline Earth maps retain their attribution in earth_credits.txt.
 
 Cloud density library and editable models authored for Meta Theatre in Blender;
 shared-atlas preview materials authored in the separate Unreal asset sandbox.
+
+Continuous cloud morphology derives from the attributed Solar System Scope /
+INOVE Earth cloud map (CC BY 4.0), with ranked density, warped fronts, spherical
+polar convergence and procedural erosion authored in Blender. See earth_credits.txt
+for the source link and license. Live data controls coverage and cloud type;
+this derived morphology is not a live satellite product.

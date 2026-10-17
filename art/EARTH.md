@@ -28,8 +28,8 @@ day/night models or spin the globe with the clock. Manual spin and geographic
 observer controls are described in [Earth exploration validation](validation/EARTH_EXPLORATION.md).
 
 This is an artistic **24-hour civil-time cycle**, not seasonal astronomical
-sunrise/sunset. It does not request location, fetch live weather, or animate cloud
-cover. An explicit clock or time-zone change immediately selects the corresponding
+sunrise/sunset. It does not request GPS location. Optional [orbital weather](WEATHER.md) uses
+viewed coordinates and current model data to update a continuous cloud field. An explicit clock or time-zone change immediately selects the corresponding
 lighting; it is not eased across a discontinuous clock change.
 
 The canonical scene keeps its 90 m Earth radius and center `(18, -35, 150)`.
@@ -40,7 +40,10 @@ spin gestures and no mesh collision; playback and panel interactions remain avai
 
 ## Editable source and runtime assets
 
-- `blender/earth_dynamic.blend`: editable source, packed textures and the scene
+- `blender/earth_detailed.blend`: separate 8K/4K lighting reference, directional
+  cloud relief, cloud shadows and ocean roughness. External image paths are relative.
+  `renders/earth_detailed/` contains daylight/night references, not headset captures.
+- `blender/earth_dynamic.blend`: preserved original source, packed textures and the scene
   `EARTH | Local time authoring`. Change the scene custom property `local_hour`
   between 0 and 24, then refresh the frame/render to preview a time.
 - `blender/earth_static_before_dynamic.blend`: source version saved before the
@@ -68,21 +71,41 @@ They are not exported as the runtime materials.
 | Surface / cloud / atmosphere triangles | 16,128 / 9,024 / 16,128 |
 | Total triangles / mesh draws | 41,280 / 3 |
 | Surface / cloud / atmosphere radii | 1 / 1.0035 / 1.012 |
-| Day, city emission, terrain normal maps | 4096 × 2048 each |
-| Ocean mask and cloud alpha maps | 2048 × 1024 each |
-| Estimated RGBA8 allocation with full mip chains | 149.3 MiB |
+| Day and city emission maps | 8192 × 4096 each |
+| Terrain normal, ocean mask and cloud alpha maps | 4096 × 2048 each |
+| Estimated static RGBA8 allocation with full mip chains | 469.3 MiB |
+| Additional live cloud texture, when enabled | 42.7 MiB with mip chains |
 | Geometry file sizes | 366,668 / 207,720 / 366,708 bytes |
-| Texture samples | 4 for the surface, 1 for clouds, 0 for atmosphere |
+| Texture samples | 5 for the surface, 6 for cloud relief/shadow, 0 for atmosphere |
 
 The opaque surface writes depth; the two translucent shells have fixed render
-order and do not write depth. CPU upload retains at most one decoded 4K bitmap
-at a time (32 MiB), excluding native upload copies. Texture memory is an estimate,
+order and do not write depth. CPU upload retains at most one decoded bitmap
+at a time (128 MiB for an 8K map), excluding native upload copies. Texture memory is an estimate,
 not headset telemetry; mesh buffers, native copies and render targets add cost.
 
 SDK 0.14.0's native Bitmap texture path was inspected and uses
 `VK_FORMAT_R8G8B8A8_SRGB`. Day/night samples arrive in linear space; shader conversion
 restores numeric normal/ocean data after hardware decoding. Cloud alpha is
 unaffected. Native-symbol evidence is in `validation/earth_dynamic_build.json`.
+
+## Detailed rendering update
+
+The 2026-10-17 quality pass uses the existing native 8K day/city-light source detail,
+4K offline/live cloud density and a 4K ocean mask. The original 4K normal map stays
+unchanged. The surface samples the same current cloud map as the cloud shell to
+cast directional shadows. Cloud gradients add relief; a directional density sample
+adds self-shadow, and optical depth retains thin wisps and dense areas. Ocean
+highlights use view-dependent Fresnel. Geometry, the three-layer structure and
+shared day/night timing are unchanged.
+
+`python3 art/scripts/prepare_detailed_earth.py` prepares the upgraded runtime maps
+from the existing attributed source files. `author_cloud_structure.py` bakes the
+continuous weather field through Blender MCP; `author_detailed_earth_preview.py`
+creates a separate lighting reference using preserved dynamic Earth geometry.
+The older regeneration procedure below reconstructs the earlier 4K/2K version;
+run the detailed preparation afterward to retain the current resolution.
+See [quality validation](validation/EARTH_QUALITY.md) for measured Quest cost and
+remaining visual/performance checks.
 
 ## Regeneration
 

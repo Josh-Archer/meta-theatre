@@ -40,6 +40,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private var skyFrame = Pose()
     private var spin = 0f
     private var cloudMaterial: SceneMaterial? = null
+    private var surfaceMaterial: SceneMaterial? = null
     private var originalCloudTexture: SceneTexture? = null
     private var weatherTexture: SceneTexture? = null
     private var weatherMap: WeatherCloudMap? = null
@@ -71,7 +72,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
         // Decode off the UI thread; native texture/material upload and scene mutation stay on main.
         val sampler = SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)
         val gpuMaps = mutableMapOf<String, SceneTexture>()
-        // Keep at most one decoded 4K bitmap in memory during upload.
+        // Upload one source at a time, including native 8K day/city maps (128 MiB decoded).
         for (name in listOf("day.jpg", "night.jpg", "normal.jpg", "ocean.jpg", "clouds.png")) {
             val bitmap = withContext(Dispatchers.IO) {
                 activity.assets.open("earth/$name").use { input ->
@@ -84,13 +85,15 @@ class EarthRenderer(private val activity: TheatreActivity) {
                 bitmap.recycle()
             }
         }
-        val surface = material("earth_surface", listOf("dayMap", "nightMap", "normalMap", "oceanMap"))
+        val surface = material("earth_surface", listOf("dayMap", "nightMap", "normalMap", "oceanMap", "cloudMap"))
         surface.setTexture("dayMap", gpuMaps.getValue("day.jpg"))
         surface.setTexture("nightMap", gpuMaps.getValue("night.jpg"))
         surface.setTexture("normalMap", gpuMaps.getValue("normal.jpg"))
         surface.setTexture("oceanMap", gpuMaps.getValue("ocean.jpg"))
         val clouds = material("earth_clouds", listOf("cloudMap"), transparent = true)
         originalCloudTexture = gpuMaps.getValue("clouds.png")
+        surfaceMaterial = surface
+        surface.setTexture("cloudMap", originalCloudTexture!!)
         cloudMaterial = clouds
         clouds.setTexture("cloudMap", originalCloudTexture!!)
         val atmosphere = material("earth_atmosphere", emptyList(), transparent = true)
@@ -122,7 +125,9 @@ class EarthRenderer(private val activity: TheatreActivity) {
         val next = try {
             bitmap?.let { SceneTexture(it, SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)) }
         } finally { bitmap?.recycle() }
-        cloud.setTexture("cloudMap", next ?: checkNotNull(originalCloudTexture))
+        val cloudMap = next ?: checkNotNull(originalCloudTexture)
+        cloud.setTexture("cloudMap", cloudMap)
+        surfaceMaterial?.setTexture("cloudMap", cloudMap)
         val previous = weatherTexture
         weatherTexture = next
         previous?.destroy()
@@ -156,6 +161,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
     /** Called after Spatial SDK shuts down its scene and cached meshes. */
     fun release() {
         cloudMaterial = null
+        surfaceMaterial = null
         weatherTexture?.destroy(); weatherTexture = null
         weatherMap = null
         materials.forEach { it.destroy() }

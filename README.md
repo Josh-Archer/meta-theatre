@@ -73,7 +73,10 @@ as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EX
 for automated checks and the remaining headset checks.
 
 Open **Explore Earth → Weather settings → Live weather: On** to apply current
-weather to the hemisphere you are viewing. It starts off and saves your choice
+weather to the hemisphere you are viewing. Earth uses 8K surface/city-light maps
+and 4K cloud detail, with cloud relief and shadows. The live cloud field is
+continuous rather than made from repeating cloud tiles. See the
+[quality checks](art/validation/EARTH_QUALITY.md). It starts off and saves your choice
 on the headset. Orbiting or spinning Earth selects a new region after the view
 settles; weather refreshes every 15 minutes while the app has focus. **Refresh**
 requests an update; **Off** restores the original cloud map.

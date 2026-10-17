@@ -13,6 +13,10 @@ requests are spaced by at least five seconds. A focused session refreshes every
 memory. No weather responses, viewed coordinates or API URLs are logged or saved
 to disk. There is no GPS permission, API key, account token or geocoding lookup.
 
+A continuous 4096×2048 field preserves global cloud morphology and fine optical
+depth. Readings are interpolated separately from that detail; there are no repeating
+cloud stamps or flat clipped patches under overcast skies.
+
 The readings drive modeled cloud density; this is not satellite imagery or
 pixel-accurate cloud placement. Fog, rain, snow and storms select corresponding
 cloud shapes; no claim is made about exact lightning strikes or ground snow.
@@ -27,6 +31,15 @@ Data attribution/license: [Open-Meteo](https://open-meteo.com/),
 The attribution also ships in `weather_credits.txt` and the weather panel.
 
 ## Blender and Unreal sources
+
+The native renderer now uses `blender/weather_continuous.blend` and
+`textures/weather/cloud_structure.png`, authored by `scripts/author_cloud_structure.py`.
+Its RGB channels hold global ranked morphology, multiscale erosion and warped
+fronts, with longitude wrapping and polar convergence. The source cloud morphology
+comes from the attributed Solar System Scope map. Model weather controls coverage
+and cloud type; source patterns do not establish actual live cloud positions.
+The smaller original density atlas and neutral meshes below remain authoring and
+Unreal reference assets; the app no longer stamps that atlas onto Earth.
 
 - `blender/weather_patterns.blend`: seven editable metaball density patterns,
   seven independent neutral mesh exports, preview camera and lighting. Scene-only
@@ -52,9 +65,9 @@ The attribution also ships in `weather_credits.txt` and the weather panel.
 The app generates a cloud map at the original offline map's full resolution on a
 background dispatcher. Spherical blending handles poles and the texture seam;
 unsampled geography retains the offline map. Texture uploads and scene mutation
-stay on the main thread. Replaced GPU textures are destroyed. Surface, city lights,
-normal and ocean textures, atmosphere, geometry and shared day/night lighting are
-unchanged. Earth remains three draws; weather adds no cloud mesh draws.
+stay on the main thread. Replaced GPU textures are destroyed. The surface and cloud shell share that same texture so land shadows follow
+the active weather. Surface/city maps use native 8K detail; normal, ocean and cloud
+maps are 4K. Atmosphere, geometry and shared day/night timing remain intact. Earth remains three draws; weather adds no cloud mesh draws.
 
 Run `scripts/validate_weather_assets.cjs` with `gltf-validator` available on the
 Node module path to check the exported GLBs and atlas packaging.

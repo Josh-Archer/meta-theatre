@@ -8,80 +8,100 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.*
 
-/** Reuses the full-resolution cloud shell. Atlas density is baked from the editable Blender library. */
+/** Continuous global morphology: weather changes coverage and cloud type, never stamps repeated tiles. */
 internal class WeatherCloudMap private constructor(private val width: Int, private val height: Int,
-    private val original: ByteArray, private val atlas: ByteArray, private val tile: Int, private val means: FloatArray) {
+    private val original: ByteArray, private val structure: Array<ByteArray>) {
     suspend fun build(snapshot: WeatherSnapshot): Bitmap {
-        val weight = FloatArray(width * height)
-        val density = FloatArray(width * height)
-        val latSin = DoubleArray(height) { sin(Math.PI * (.5 - (it + .5) / height)) }
-        val latCos = DoubleArray(height) { cos(Math.PI * (.5 - (it + .5) / height)) }
-        val lonSin = DoubleArray(width) { sin(Math.PI * (2 * (it + .5) / width - 1)) }
-        val lonCos = DoubleArray(width) { cos(Math.PI * (2 * (it + .5) / width - 1)) }
-        for (reading in snapshot.readings) {
-            currentCoroutineContext().ensureActive()
-            val lat = Math.toRadians(reading.place.latitude); val lon = Math.toRadians(reading.place.longitude)
-            val sl = sin(lat); val cl = cos(lat); val sn = sin(lon); val cn = cos(lon)
-            val wind = Math.toRadians(reading.windDirection)
-            val cover = max(reading.cloudCover / 100f, when (reading.pattern) {
-                CloudPattern.FOG -> .35f
-                CloudPattern.RAIN_FRONT, CloudPattern.SNOW_BANDS, CloudPattern.THUNDERHEAD -> .6f
-                else -> 0f
+        // Interpolate coarse model readings independently of high-resolution cloud detail.
+        // Five small fields replace two full-resolution float buffers and repeated per-cell map splats.
+        val fields = Array(5) { FloatArray(GRID_W * GRID_H) }
+        data class Sample(val x: Double,val y: Double,val z: Double,val cover: Float,val front: Float,val storm: Float,val fog: Float)
+        val samples=snapshot.readings.map { reading ->
+            val n=reading.place.normal()
+            val pattern=reading.pattern
+            val cover=if(pattern==CloudPattern.CLEAR) 0f else max(reading.cloudCover/100f,when(pattern){
+                CloudPattern.FOG->.35f
+                CloudPattern.RAIN_FRONT,CloudPattern.SNOW_BANDS,CloudPattern.THUNDERHEAD->.6f
+                else->0f
             })
-            val y0 = (((90 - reading.place.latitude - 28) / 180 * height).toInt()).coerceAtLeast(0)
-            val y1 = (((90 - reading.place.latitude + 28) / 180 * height).toInt()).coerceAtMost(height - 1)
-            val dx = min(180.0, 28 / max(.05, cos(Math.toRadians(min(90.0, abs(reading.place.latitude) + 28)))))
-            val centerX = ((reading.place.longitude + 180) / 360 * width).toInt()
-            val span = min(width / 2, ceil(dx / 360 * width).toInt())
-            for (y in y0..y1) for (rawX in centerX-span until centerX+span) {
-                val x = (rawX % width + width) % width
-                val vx = latCos[y] * lonSin[x]; val vy = latSin[y]; val vz = latCos[y] * lonCos[x]
-                val dot = vx*cl*sn + vy*sl + vz*cl*cn
-                if (dot < .88294759) continue // 28 degrees, including seam/pole crossings
-                val east = atan2(vx*cn - vz*sn, dot)
-                val north = atan2(-vx*sl*sn + vy*cl - vz*sl*cn, dot)
-                val radius = east*east + north*north
-                val w = (exp(-radius / .040) * ((dot - .88294759) / .05).coerceIn(0.0, 1.0)).toFloat()
-                val u = (east*cos(wind) + north*sin(wind)) / .105 + .5
-                val v = (-east*sin(wind) + north*cos(wind)) / .105 + .5
-                val pattern = reading.pattern.ordinal
-                val tx = ((u-floor(u))*tile).toInt().coerceIn(0,tile-1)
-                val ty = ((v-floor(v))*tile).toInt().coerceIn(0,tile-1)
-                val alpha = (atlas[((pattern / 4 * tile + ty) * tile * 4) + pattern % 4 * tile + tx].toInt() and 255) / 255f
-                val value = if (pattern == 0) 0f else (alpha * cover / max(.12f,means[pattern])).coerceIn(0f,1f)
-                val index = y*width+x
-                weight[index] += w; density[index] += w*value
+            Sample(n.x.toDouble(),n.y.toDouble(),n.z.toDouble(),cover,
+                if(pattern==CloudPattern.RAIN_FRONT || pattern==CloudPattern.SNOW_BANDS)1f else 0f,
+                if(pattern==CloudPattern.THUNDERHEAD)1f else 0f,if(pattern==CloudPattern.FOG)1f else 0f)
+        }
+        for(y in 0 until GRID_H){
+            currentCoroutineContext().ensureActive()
+            val lat=Math.PI*(.5-(y+.5)/GRID_H);val cl=cos(lat);val sl=sin(lat)
+            for(x in 0 until GRID_W){
+                val lon=Math.PI*(2*(x+.5)/GRID_W-1);val nx=cl*sin(lon);val nz=cl*cos(lon)
+                var weight=0f;var cover=0f;var front=0f;var storm=0f;var fog=0f
+                for(sample in samples){
+                    val dot=(nx*sample.x+sl*sample.y+nz*sample.z).coerceIn(-1.0,1.0)
+                    if(dot<.88294759)continue
+                    val angle=acos(dot)
+                    val w=(exp(-angle*angle/.040)*((dot-.88294759)/.05).coerceIn(0.0,1.0)).toFloat()
+                    weight+=w;cover+=sample.cover*w;front+=sample.front*w;storm+=sample.storm*w;fog+=sample.fog*w
+                }
+                val i=y*GRID_W+x
+                fields[0][i]=weight.coerceAtMost(1f)
+                if(weight>0){fields[1][i]=cover/weight;fields[2][i]=front/weight;fields[3][i]=storm/weight;fields[4][i]=fog/weight}
             }
         }
-        currentCoroutineContext().ensureActive()
-        val pixels = IntArray(width*height) { index ->
-            val w = weight[index]
-            val blend = min(1f,w)
-            val alpha = ((original[index].toInt() and 255)*(1-blend) + if(w > 0) density[index]/w*255*blend else 0f).roundToInt().coerceIn(0,255)
-            Color.argb(alpha,255,255,255)
+        val pixels=IntArray(width*height)
+        val x0=IntArray(width);val x1=IntArray(width);val tx=FloatArray(width)
+        for(x in 0 until width){
+            val gx=(x+.5f)*GRID_W/width-.5f;val floorX=floor(gx).toInt()
+            x0[x]=(floorX+GRID_W)%GRID_W;x1[x]=(floorX+1+GRID_W)%GRID_W;tx[x]=gx-floorX
+        }
+        for(y in 0 until height){
+            currentCoroutineContext().ensureActive()
+            val gy=((y+.5f)*GRID_H/height-.5f).coerceIn(0f,GRID_H-1f)
+            val y0=floor(gy).toInt();val y1=min(GRID_H-1,y0+1);val ty=gy-y0
+            for(x in 0 until width){
+                fun field(channel:Int):Float{
+                    val data=fields[channel]
+                    val top=data[y0*GRID_W+x0[x]]*(1-tx[x])+data[y0*GRID_W+x1[x]]*tx[x]
+                    val bottom=data[y1*GRID_W+x0[x]]*(1-tx[x])+data[y1*GRID_W+x1[x]]*tx[x]
+                    return top*(1-ty)+bottom*ty
+                }
+                val index=y*width+x;val blend=field(0)
+                val old=(original[index].toInt() and 255)/255f
+                val cover=field(1);val front=field(2);val storm=field(3);val fog=field(4)
+                val cells=(structure[0][index].toInt() and 255)/255f
+                val erosion=(structure[1][index].toInt() and 255)/255f
+                val bands=(structure[2][index].toInt() and 255)/255f
+                val shape=cells*(1-front*.8f)+bands*front*.8f
+                val threshold=1-cover
+                val edge=((shape-threshold+.045f)/.09f).coerceIn(0f,1f)
+                val envelope=if(cover<=.001f)0f else if(cover>=.999f)1f else edge*edge*(3-2*edge)
+                // Fine optical depth survives fully overcast weather; it never clips to a flat white patch.
+                val depth=(.28f+.28f*erosion+.42f*old)*(1-fog*.48f)+storm*.12f
+                val value=(envelope*depth).coerceIn(0f,.98f)
+                val alpha=((old*(1-blend)+value*blend)*255).roundToInt().coerceIn(0,255)
+                pixels[index]=Color.argb(alpha,255,255,255)
+            }
         }
         return Bitmap.createBitmap(pixels,width,height,Bitmap.Config.ARGB_8888)
     }
     companion object {
+        private const val GRID_W=128
+        private const val GRID_H=64
         fun load(assets: AssetManager): WeatherCloudMap {
-            fun decode(path: String) = assets.open(path).use { checkNotNull(BitmapFactory.decodeStream(it)) }
-            val base = decode("earth/clouds.png")
-            val pattern = decode("weather/cloud_patterns.png")
+            fun decode(path: String)=assets.open(path).use{checkNotNull(BitmapFactory.decodeStream(it))}
+            val base=decode("earth/clouds.png")
+            val pattern=decode("weather/cloud_structure.png")
             try {
-                check(pattern.width == 4096 && pattern.height == 2048)
-                fun alpha(bitmap: Bitmap): ByteArray {
-                    val pixels = IntArray(bitmap.width*bitmap.height)
-                    bitmap.getPixels(pixels,0,bitmap.width,0,0,bitmap.width,bitmap.height)
-                    return ByteArray(pixels.size) { (pixels[it] ushr 24).toByte() }
+                check(base.width==4096 && base.height==2048 && pattern.width==base.width && pattern.height==base.height)
+                // Decode a row at a time instead of allocating another full-resolution IntArray.
+                val original=ByteArray(base.width*base.height)
+                val channels=Array(3){ByteArray(original.size)};val row=IntArray(base.width)
+                for(y in 0 until base.height){
+                    base.getPixels(row,0,base.width,0,y,base.width,1)
+                    for(x in row.indices)original[y*base.width+x]=(row[x] ushr 24).toByte()
+                    pattern.getPixels(row,0,pattern.width,0,y,pattern.width,1)
+                    for(x in row.indices){val i=y*pattern.width+x;channels[0][i]=(row[x] ushr 16).toByte();channels[1][i]=(row[x] ushr 8).toByte();channels[2][i]=row[x].toByte()}
                 }
-                val mask = alpha(pattern); val tile=pattern.width/4
-                val means = FloatArray(8) { index ->
-                    var sum=0L
-                    for(y in 0 until tile) for(x in 0 until tile) sum += mask[(index/4*tile+y)*pattern.width+index%4*tile+x].toInt() and 255
-                    sum.toFloat()/(tile*tile*255f)
-                }
-                return WeatherCloudMap(base.width,base.height,alpha(base),mask,tile,means)
-            } finally { base.recycle(); pattern.recycle() }
+                return WeatherCloudMap(base.width,base.height,original,channels)
+            }finally{base.recycle();pattern.recycle()}
         }
     }
 }
