@@ -11,6 +11,10 @@ import com.meta.spatial.core.Query
 import com.meta.spatial.core.SystemBase
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.isdk.IsdkPanelDimensions
+import com.meta.spatial.isdk.IsdkPanelResize
+import com.meta.spatial.isdk.IsdkGrabbable
+import com.meta.spatial.isdk.IsdkGrabState
+import com.meta.spatial.isdk.ResizeCornerState
 import com.meta.spatial.toolkit.Controller
 import com.meta.spatial.toolkit.AvatarBody
 import com.meta.spatial.toolkit.ControllerType
@@ -55,6 +59,8 @@ internal class ScreenGripSystem(
     private val onViewTurn: (Float) -> Unit = {},
     private val earthTarget: () -> VisitorTarget? = { null },
     private val onEarthSpin: (Float) -> Unit = {},
+    private val onPause: () -> Unit = {},
+    private val mediaActive: () -> Boolean = { false },
     private val hasSubtitleCues: () -> Boolean = { false },
 ) : SystemBase() {
     var watching: Boolean = false
@@ -82,7 +88,7 @@ internal class ScreenGripSystem(
             screenMotion = null
             onSeekPreview(null)
             autoHide.setWatching(watching && !value, SystemClock.uptimeMillis())
-            screen.setComponent(Visible(!watching && !value))
+            screen.setComponent(Visible(!value))
             syncOverlays(force = true)
         }
     var overlays: ScreenOverlays? = null
@@ -252,6 +258,8 @@ internal class ScreenGripSystem(
     private fun step() {
         val now = SystemClock.uptimeMillis()
         val navigating = handsNavigating()
+        val sdkManipulating = runCatching { screen.getComponent<IsdkPanelResize>().activeResizeCorner != ResizeCornerState.NONE }.getOrDefault(false) ||
+            runCatching { screen.getComponent<IsdkGrabbable>().grabState != IsdkGrabState.NotGrabbed }.getOrDefault(false)
         if (navigating) {
             handGestures.reset()
             openGestures.reset()
@@ -259,6 +267,7 @@ internal class ScreenGripSystem(
             if (wasHandResizing) saveScreenSize()
             wasHandResizing = false
         }
+        if (sdkManipulating) { grab = null; screenMotion = null }
         advanceScreenMove(now)
         advancePresentation(now)
         val inputs = Query.where { has(Controller.id) }.eval().mapNotNull { entity ->
@@ -283,8 +292,8 @@ internal class ScreenGripSystem(
         val visitorPointers = if (globe == null) pointers else pointers.map { pointer ->
             ScenePointer.hit(pointer, globe)?.let { pointer.copy(maxDistance = it.distance) } ?: pointer
         }
-        val visitorInput = visitors?.interact(visitorPointers, viewerPose(), now, navigating) ?: VisitorInputResult()
-        val earthInput = earthSpin.update(pointers, globe, viewerPose(), navigating, visitorInput.owned)
+        val visitorInput = visitors?.interact(visitorPointers, viewerPose(), now, navigating || sdkManipulating) ?: VisitorInputResult()
+        val earthInput = earthSpin.update(pointers, globe, viewerPose(), navigating || sdkManipulating, visitorInput.owned)
         if (earthInput.degrees != 0f) onEarthSpin(earthInput.degrees)
         val sceneOwned = visitorInput.owned + earthInput.owned
         val sceneHover = listOfNotNull(visitorInput.hover, earthInput.hover).minByOrNull { it.distance }
@@ -318,7 +327,7 @@ internal class ScreenGripSystem(
             val previousDown = downState.put(id, down)
             val pressed = previousDown == false && down
             val released = previousDown == true && !down
-            if (id in sceneOwned) continue
+            if (id in sceneOwned || sdkManipulating) continue
             if (!interactive) {
                 if (!isHand) {
                     turnFromStick(controller)
@@ -410,7 +419,7 @@ internal class ScreenGripSystem(
         }
         if (grab?.driver?.id !in ids) grab = null
         val size = screenSize()
-        val actions = handGestures.update(hands, size, now, watching, !interactive, navigating)
+        val actions = handGestures.update(hands, size, now, watching, !interactive, navigating || sdkManipulating)
         if (actions.resizing != wasHandResizing) {
             wasHandResizing = actions.resizing
             if (!actions.resizing) saveScreenSize()
@@ -433,7 +442,7 @@ internal class ScreenGripSystem(
         }
         for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
         if (!watching && !screenHidden && libraryScroll != 0) onScroll(libraryScroll)
-        if (!navigating) processOpenHands(inputs, now, sceneOwned.isNotEmpty())
+        if (!navigating) processOpenHands(inputs, now, sceneOwned.isNotEmpty() || sdkManipulating)
         placeCursor(hovered?.takeIf { interactive || sceneHover != null })
     }
 
@@ -463,8 +472,16 @@ internal class ScreenGripSystem(
             }
         }
         val palms = OpenHandFrame.project(nativePalms, pose, viewerPose(), aimedSides)
-        val actions = openGestures.update(palms, true, pinching || gripping || visitorOwned, now, screenHidden)
-        if (actions.close) {
+        val actions = openGestures.update(palms, true, pinching || gripping || visitorOwned, now, screenHidden, allowPause = watching || mediaActive())
+        if (actions.pause) {
+            onPause()
+            autoHide.interact(now)
+            Log.i(TAG, "stop palm paused media")
+        } else if (actions.depthMeters != null) {
+            screenMotion = null
+            screen.setComponent(Transform(ScreenPlacement.shiftDepth(viewerPose(), pose, actions.depthMeters)))
+            autoHide.interact(now)
+        } else if (actions.close) {
             screenMotion = null
             Log.i(TAG, "open hands hide screen")
             onScreenHiddenChange(true)
@@ -505,7 +522,7 @@ internal class ScreenGripSystem(
         val scale = presentationScale ?: return
         val fraction = visibilityMotion.fraction(now)
         screen.setComponent(Scale(Vector3(scale.x * fraction.coerceAtLeast(.001f), scale.y, scale.z)))
-        screen.setComponent(Visible(!watching && fraction > .001f))
+        screen.setComponent(Visible(fraction > .001f))
         if (!screenHidden && !visibilityMotion.animating(now)) {
             screen.setComponent(Scale(scale))
             presentationScale = null

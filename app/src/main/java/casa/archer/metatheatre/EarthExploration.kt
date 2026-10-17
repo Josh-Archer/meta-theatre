@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 internal enum class EarthControl(val label: String) {
     NORTH_POLE("North Pole"), SOUTH_POLE("South Pole"), EQUATOR("Equator"), FAR_SIDE("Far side"),
     ORBIT_LEFT("Orbit left"), ORBIT_RIGHT("Orbit right"), ORBIT_UP("Orbit north"), ORBIT_DOWN("Orbit south"),
-    SPIN_LEFT("Spin left"), SPIN_RIGHT("Spin right"), HOME("Home seat"), DONE("Back to library")
+    SPIN_LEFT("Spin left"), SPIN_RIGHT("Spin right"), HOME("Home seat"), DONE("Done")
 }
 
 internal object EarthControls {

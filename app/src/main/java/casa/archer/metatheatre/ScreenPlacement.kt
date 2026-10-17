@@ -5,6 +5,15 @@ import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.Vector3
 
 internal object ScreenPlacement {
+    fun shiftDepth(viewer: Pose, current: Pose, meters: Float): Pose {
+        if (!meters.isFinite()) return current
+        val offset = current.t - viewer.t
+        val distance = offset.length()
+        if (distance < .01f) return current
+        val next = (distance + meters).coerceIn(1.5f, 6f)
+        return Pose(viewer.t + offset * (next / distance), current.q.copy())
+    }
+
     /** Restore in the current view after a turn or step; keep the screen upright. */
     fun restore(viewer: Pose, current: Pose): Pose {
         val gaze = viewer.forward()

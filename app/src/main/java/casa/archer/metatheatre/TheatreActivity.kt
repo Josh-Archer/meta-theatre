@@ -187,7 +187,7 @@ class TheatreActivity : AppSystemActivity() {
                 grabHandleCollisionWidths = Vector4(0.10f, 0.10f, 0.10f, 0.10f),
                 resizeCornerCollisionSizes = Vector4(0.22f, 0.22f, 0.22f, 0.22f),
                 outset = Vector4(0.04f, 0.04f, 0.04f, 0.04f),
-                zOffset = 0.02f,
+                zOffset = 0.08f,
                 color = Vector4(0.84f, 0.71f, 0.43f, 1f),
             ),
         )
@@ -210,6 +210,8 @@ class TheatreActivity : AppSystemActivity() {
                 onViewTurn = ::turnView,
                 earthTarget = { earthRenderer?.target() },
                 onEarthSpin = ::spinEarth,
+                onPause = { scope.launch { model.pausePlayback() } },
+                mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
             )
             grip = system
@@ -284,10 +286,11 @@ class TheatreActivity : AppSystemActivity() {
         screenPlayer.setScreenHidden(watching && hidden)
         val panel = screen ?: return
         Log.i(TAG, if (watching) "show movie" else "show library")
-        runCatching { panel.setComponent(Visible(!watching && !hidden)) }
+        // Keep the transparent panel carrier alive: ISDK grab/resize handles belong to it.
+        runCatching { panel.setComponent(Visible(!hidden)) }
         panel.setComponent(
             IsdkPanelResize(
-                enabled = !watching && !hidden,
+                enabled = !hidden,
                 resizeMode = ResizeMode.Relayout,
                 minDimensions = Vector2(1.2f, 1.2f * 9f / 16f),
                 maxDimensions = Vector2(8f, 8f * 9f / 16f),
@@ -486,8 +489,13 @@ class TheatreActivity : AppSystemActivity() {
                         width = EarthOrbit.screenWidth,
                         height = EarthOrbit.screenHeight,
                     ),
-                    style = PanelStyleOptions(themeResourceId = R.style.PanelTheme),
-                    display = DpDisplayOptions(width = 1600f, height = 900f, dpi = 180),
+                    style = object : PanelStyleOptions(themeResourceId = R.style.PanelTheme) {
+                        override fun applyTo(options: PanelConfigOptions) {
+                            super.applyTo(options)
+                            options.alphaMode = AlphaMode.TRANSLUCENT
+                        }
+                    },
+                    display = DpDisplayOptions(width = 1600f, height = 900f, dpi = 160),
                     rendering = UIPanelRenderOptions(PanelRenderMode.Mesh()),
                 )
             },

@@ -15,6 +15,38 @@ import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class ScreenPlayerIntentIntegrationTest {
+    @Test fun stopPalmPausesBufferingMediaThroughModelAndCannotResumeItByRepeating() {
+        val f = fixture(initialPlayWhenReady = true)
+        val model = TheatreModel(RuntimeEnvironment.getApplication(), f.screenPlayer)
+        val gesture = OpenHandGestures()
+        val stop = listOf(OpenHandInput(0, HandPoint(0f, 0f, 0f), HandPoint(0f, 0f, -1f), false,
+            viewerFacing = -1f, raisedInView = true))
+        gesture.update(stop, true, false, 0)
+        if (gesture.update(stop, true, false, 510).pause) model.pausePlayback()
+        assertFalse(f.screenPlayer.transport.value.playWhenReady)
+        if (gesture.update(stop, true, false, 1200).pause) model.pausePlayback()
+        verify(f.player).pause()
+        verify(f.player, never()).play()
+        model.release()
+    }
+
+    @Test fun explicitPauseClearsSuspendedResumeIntentAndPendingSurfaceAutoplay() {
+        val f = fixture(initialPlayWhenReady = true)
+        f.screenPlayer.onMenuOpened()
+        f.screenPlayer.pause()
+        f.screenPlayer.onMenuClosed()
+        verify(f.player, never()).play()
+        val native = mock(ExoPlayer::class.java)
+        val pending = ScreenPlayer(RuntimeEnvironment.getApplication()) { _, _, _ -> native }
+        pending.play(playable("pending"))
+        pending.pause()
+        pending.attach(mock(Surface::class.java))
+        verify(native).setPlayWhenReady(false)
+        verify(native, never()).play()
+        pending.release()
+        f.screenPlayer.release()
+    }
+
     @Test fun aHiddenPendingMovieWaitsForRestorationAfterItsSurfaceArrives() {
         val native = mock(ExoPlayer::class.java)
         val screen = ScreenPlayer(RuntimeEnvironment.getApplication()) { _, _, _ -> native }

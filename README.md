@@ -55,12 +55,13 @@ and the remaining checks on a Quest.
 
 ## Explore Earth
 
-Open the library and choose **Earth** along its bottom edge. Choose **North Pole**,
+Choose the large **Explore Earth** button on the movie's side menu or along the
+library's bottom edge. Choose **North Pole**,
 **South Pole**, **Equator**, or **Far side** to move around the globe. Earth stays
 ahead of you and your chair and screen stay with you. The orbit buttons move
 20 degrees around or 15 degrees toward a pole per press. A controller stick aimed
 at this menu also moves around the orbit. **Home seat** restores the original
-view and globe rotation; **Back to library** closes the menu.
+view and globe rotation; **Done** returns to the movie or library you came from.
 
 Point at exposed Earth outside the screen, hold an index/thumb pinch or controller
 trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
@@ -109,6 +110,17 @@ after turning while it was hidden. A movie pauses while hidden and resumes its p
 playback intent when restored; an already paused movie stays paused. The gesture
 also hides the library. Hidden screens do not accept movie or library presses.
 
+Hold one open hand up in front of you, palm facing away from you, for half a
+second to pause active media. Lower your hand before repeating. This only pauses;
+use **Play** or a screen tap to resume.
+
+Raise both open hands, palms facing away from you, and push forward to move the
+screen farther away. Turn both palms toward your face and pull back to bring it
+closer. Both hands must move together; no pinch or ray target is required. Pulling
+also brings a hidden screen back into your current view. The screen keeps its size
+and stops between 1.5 and 6 metres away. The native grab frame and resize corners
+remain available during playback: drag an edge to move or a corner to resize.
+
 To resize either the library or movie screen, aim both hands at its face, pinch
 with both index fingers and thumbs, then hold both pinches while moving your
 hands apart to enlarge it or together to shrink it. The first pinch can wait
@@ -150,7 +162,10 @@ to cover pagination, canceled navigation, search, playback intent, track
 selection, subtitle rendering, quiet-mode settings, scene-control hit regions,
 visitor capture/pull/rotation/release, and native-palm screen folding after a
 turn or recenter. Earth integration tests cover polar observer frames, spin
-gestures, panel occlusion, and shared lighting. These checks do not
+gestures, panel occlusion, and shared lighting. Stop-palm and two-hand depth checks
+cover buffering, tracking loss, turned views, and hidden-screen restoration.
+Native font rendering checks the larger side-menu labels and their hit targets.
+These checks do not
 replace playback and hand/controller testing on an awake Quest.
 
 ## 3D assets

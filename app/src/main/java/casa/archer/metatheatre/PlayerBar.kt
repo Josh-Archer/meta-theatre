@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val Ink = Color(0xFFF4F1EA)
-private val Muted = Color(0xFFABB6C7)
+private val Muted = Color(0xFFD5DCE8)
 private val Accent = Color(0xFFDFC58F)
 private val Zone = Color(0xFF253043)
 private val Outline = Color(0xFF3A465A)
@@ -75,21 +75,21 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             .border(1.dp, Outline, RoundedCornerShape(36.dp))
             .padding(30.dp),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().weight(0.18f), verticalArrangement = Arrangement.Center) {
-            Text("NOW PLAYING", color = Accent, fontSize = 20.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.height(18.dp))
-            Text(transport.title.ifBlank { "Theatre" }, color = Ink, fontSize = 34.sp,
+        Column(modifier = Modifier.fillMaxWidth().weight(0.13f), verticalArrangement = Arrangement.Center) {
+            Text("NOW PLAYING", color = Accent, fontSize = 26.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(14.dp))
+            Text(transport.title.ifBlank { "Theatre" }, color = Ink, fontSize = 38.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
             if (transport.subtitle.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                Text(transport.subtitle, color = Muted, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(transport.subtitle, color = Muted, fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.26f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.23f), verticalArrangement = Arrangement.Center) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(clock(transport.positionMs), color = Ink, fontSize = 22.sp)
-                Text(clock(transport.durationMs), color = Muted, fontSize = 22.sp)
+                Text(clock(transport.positionMs), color = Ink, fontSize = 28.sp)
+                Text(clock(transport.durationMs), color = Muted, fontSize = 28.sp)
             }
             SeekTrack(seekPreview ?: progress, targets, enabled = transport.durationMs > 0,
                 onSeek = model::seekToFraction)
@@ -104,17 +104,17 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.17f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.14f), verticalArrangement = Arrangement.Center) {
             RailLabel("SCREEN SIZE")
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             RailButton("＋  Larger", targets, PlayerControl.LARGER, highlighted = true, height = 82) { model.playerControl(PlayerControl.LARGER) }
             Spacer(Modifier.height(12.dp))
             RailButton("−  Smaller", targets, PlayerControl.SMALLER, height = 70) { model.playerControl(PlayerControl.SMALLER) }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.26f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.32f), verticalArrangement = Arrangement.Center) {
             RailLabel("VIDEO QUALITY")
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 for ((quality, control) in listOf(
                     PlaybackQuality.ORIGINAL to PlayerControl.ORIGINAL,
@@ -124,14 +124,14 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
                     SmallKey(quality.label, targets, control, selected = transport.quality == quality) { model.playerControl(control) }
                 }
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             ResolutionRow("Playing", transport.videoWidth, transport.videoHeight)
             ResolutionRow("Source", transport.sourceWidth, transport.sourceHeight)
             val notice = movieQualityNotice(transport.quality, transport.sourceWidth, transport.sourceHeight,
                 transport.videoWidth, transport.videoHeight)
             Text(transport.detail.ifBlank { notice.ifBlank { transport.playbackMode } },
-                color = if (notice.isNotBlank()) Accent else Muted, fontSize = 19.sp,
-                maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
+                color = if (notice.isNotBlank()) Accent else Muted, fontSize = 24.sp,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(12.dp))
             val audio = tracks.audio.firstOrNull { it.id == tracks.selectedAudioId }?.label ?: "Default"
             val subtitle = tracks.subtitles.firstOrNull { it.id == tracks.selectedSubtitleId }?.label ?: "Off"
@@ -140,14 +140,16 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
             TrackKey("Subtitles: $subtitle", targets, PlayerControl.SUBTITLES) { model.playerControl(PlayerControl.SUBTITLES) }
         }
         RailDivider()
-        Column(modifier = Modifier.fillMaxWidth().weight(0.13f), verticalArrangement = Arrangement.Center) {
+        Column(modifier = Modifier.fillMaxWidth().weight(0.18f), verticalArrangement = Arrangement.Center) {
+            RailButton("Explore Earth", targets, PlayerControl.EARTH, highlighted = true, height = 82) { model.playerControl(PlayerControl.EARTH) }
+            Spacer(Modifier.height(10.dp))
             RailButton("Recently watched", targets, PlayerControl.LIBRARY, height = 74) { model.playerControl(PlayerControl.LIBRARY) }
             Spacer(Modifier.height(10.dp))
             TrackKey("Quiet cinema: ${if (quietCinema) "On" else "Off"}", targets, PlayerControl.QUIET) {
                 model.playerControl(PlayerControl.QUIET)
             }
-            Text("Pinch both hands: resize • Pinch + swipe: seek\nOpen hand + swipe: move • Bring palms together: close", color = Muted, fontSize = 16.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 14.dp))
+            Text("Hold one stop palm up to pause", color = Muted, fontSize = 24.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))
         }
     }
 }
@@ -155,20 +157,20 @@ fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
 @Composable
 private fun TrackKey(label: String, targets: PlayerHitTargets, control: PlayerControl, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(14.dp))
+        modifier = Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp))
             .background(Zone)
             .playerTarget(targets, PlayerTarget.Button(control))
             .semantics { role = Role.Button; onClick { onClick(); true } },
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(label, color = Ink, fontSize = 20.sp, maxLines = 1,
+        Text(label, color = Ink, fontSize = 26.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 14.dp))
     }
 }
 
 @Composable
 private fun RailLabel(label: String) {
-    Text(label, color = Muted, fontSize = 20.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Medium)
+    Text(label, color = Muted, fontSize = 26.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Medium)
 }
 
 @Composable
@@ -179,8 +181,8 @@ private fun RailDivider() {
 @Composable
 private fun ResolutionRow(label: String, width: Int, height: Int) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Muted, fontSize = 20.sp)
-        Text(movieResolutionLabel(width, height).ifBlank { "—" }, color = Ink, fontSize = 20.sp)
+        Text(label, color = Muted, fontSize = 26.sp)
+        Text(movieResolutionLabel(width, height).ifBlank { "—" }, color = Ink, fontSize = 26.sp)
     }
 }
 
@@ -193,7 +195,7 @@ private fun RailButton(label: String, targets: PlayerHitTargets, control: Player
             .semantics { role = Role.Button; onClick { onClick(); true } },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (highlighted) Color(0xFF211A0E) else Ink, fontSize = 30.sp,
+        Text(label, color = if (highlighted) Color(0xFF211A0E) else Ink, fontSize = 32.sp,
             fontWeight = FontWeight.SemiBold)
     }
 }
@@ -208,7 +210,7 @@ private fun RowScope.SmallKey(label: String, targets: PlayerHitTargets, control:
             .semantics { role = Role.Button; onClick { onClick(); true } },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (selected) Accent else Ink, fontSize = 24.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = if (selected) Accent else Ink, fontSize = 28.sp, fontWeight = FontWeight.Medium)
     }
 }
 

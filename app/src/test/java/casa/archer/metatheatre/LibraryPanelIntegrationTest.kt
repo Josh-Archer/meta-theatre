@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,17 +32,45 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 @Config(sdk = [34], qualifiers = "w1600dp-h900dp-mdpi")
 @LooperMode(LooperMode.Mode.PAUSED)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class LibraryPanelIntegrationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private var model: TheatreModel? = null
 
     @Before fun immediateModelWork() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
     @After fun release() { model?.release(); Dispatchers.resetMain() }
+
+    @Test fun playbackRetainsTransparentResizeFrameAndEarthMenuCanOpenFromThePlayer() {
+        val player = mock(ScreenPlayer::class.java)
+        `when`(player.transport).thenReturn(MutableStateFlow(Transport(title = "Movie", playWhenReady = true)))
+        val currentModel = TheatreModel(RuntimeEnvironment.getApplication(), player,
+            mock(PlexClient::class.java), Dispatchers.Unconfined)
+        model = currentModel
+        currentModel.libraryOpen.value = false
+        var watching: Boolean? = null
+        currentModel.onWatching = { watching = it }
+        compose.setContent { Box(Modifier.requiredSize(1600.dp, 900.dp)) { LibraryPanel(currentModel, player) } }
+        compose.onNodeWithContentDescription("Screen frame: drag edges to move, corners to resize").assertIsDisplayed()
+        compose.onNodeWithText("Link Plex").assertDoesNotExist()
+        compose.runOnIdle { currentModel.playerControl(PlayerControl.EARTH) }
+        compose.onNodeWithText("North Pole").assertIsDisplayed()
+        compose.runOnIdle { captureUiFixture(compose.activity, "earth-controls.png") }
+        compose.runOnIdle {
+            assertEquals(false, watching)
+            assertTrue(currentModel.libraryOpen.value)
+            assertTrue(currentModel.earthControlsOpen.value)
+            currentModel.earthControl(EarthControl.DONE)
+            assertFalse(currentModel.libraryOpen.value)
+            assertEquals(true, watching)
+        }
+        compose.onNodeWithContentDescription("Screen frame: drag edges to move, corners to resize").assertIsDisplayed()
+    }
 
     @Test fun renderedSceneControlsMatchQuestRayCoordinatesWithoutLinkingPlex() {
         val player = mock(ScreenPlayer::class.java)
@@ -122,7 +152,7 @@ class LibraryPanelIntegrationTest {
         }
         compose.setContent { Box(Modifier.requiredSize(1600.dp, 900.dp)) { LibraryPanel(currentModel, player) } }
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        val earth = compose.onNodeWithText("Earth").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val earth = compose.onNodeWithText("Explore Earth").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         compose.runOnIdle { assertTrue(currentModel.sceneControlPress(earth.center.x / root.width, earth.center.y / root.height)) }
         compose.onNodeWithText("Explore Earth").assertIsDisplayed()
         compose.runOnIdle {
@@ -150,7 +180,7 @@ class LibraryPanelIntegrationTest {
             assertEquals(Browse.SignedOut, currentModel.browse.value)
             assertEquals(com.meta.spatial.core.Pose(), exploration.worldFrame)
         }
-        compose.onNodeWithText("Earth").assertIsDisplayed()
+        compose.onNodeWithText("Explore Earth").assertIsDisplayed()
     }
 
     private fun press(bounds: Rect, model: TheatreModel) {

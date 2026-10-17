@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,6 +69,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val confirmSignOut by model.signOutConfirmation.collectAsState()
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
+    val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
     }.collectAsState(initial = false)
@@ -75,6 +77,12 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val window = PosterGrid.window(tiles.size, page)
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, onPrimary = Color(0xFF1A1408))) {
+        if (!libraryOpen && movieReady) {
+            Box(Modifier.fillMaxSize().border(4.dp, Accent).semantics {
+                contentDescription = "Screen frame: drag edges to move, corners to resize"
+            })
+            return@MaterialTheme
+        }
         if (confirmSignOut) {
             SignOutPrompt(model)
             return@MaterialTheme
@@ -323,7 +331,7 @@ private fun ShelfHeader(
             }
         }
         ZoneButton(
-            label = if (browse is Browse.Home) "Libraries" else if (movieReady && browse !is Browse.SignedOut) "Player" else "",
+            label = if (browse is Browse.Home) "Libraries" else if (movieReady) "Player" else "",
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.SIGN_OUT_X - PosterGrid.PLAYER_X),
         ) { if (browse is Browse.Home) model.openLibraries() else model.showPlayer() }
         ZoneButton(
@@ -425,7 +433,7 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.PREV_X),
         ) {}
         SceneControl.entries.forEachIndexed { index, control ->
-            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index])) {
+            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]), highlighted = control == SceneControl.EARTH) {
                 model.sceneControlPress(SceneControls.center(control), .96f)
             }
         }
@@ -495,7 +503,7 @@ private fun Linking(code: String) {
 }
 
 @Composable
-private fun ZoneButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier = modifier
             .padding(6.dp)
@@ -507,7 +515,7 @@ private fun ZoneButton(label: String, modifier: Modifier, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         if (label.isNotBlank()) {
-            Text(label, color = Ink, fontSize = 20.sp, maxLines = 1)
+            Text(label, color = if (highlighted) Accent else Ink, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

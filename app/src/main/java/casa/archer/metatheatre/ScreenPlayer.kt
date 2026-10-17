@@ -176,6 +176,13 @@ class ScreenPlayer internal constructor(
         publish()
     }
 
+    fun pause() {
+        pendingPlayWhenReady = false
+        resumeAfterSuspension = false
+        player?.pause()
+        publish()
+    }
+
     fun toggle() {
         val current = player ?: return
         if (menuOpen || screenHidden) {

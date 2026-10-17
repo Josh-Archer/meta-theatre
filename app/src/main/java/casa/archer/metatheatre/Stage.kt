@@ -2,8 +2,8 @@ package casa.archer.metatheatre
 
 /** Physical spacing for the video and its independent side controls. */
 internal object Stage {
-    const val PLAYER_WIDTH = 0.56f
-    const val PLAYER_HEIGHT = 1.64f
+    const val PLAYER_WIDTH = 0.84f
+    const val PLAYER_HEIGHT = 2.0f
     const val PLAYER_GAP = 0.10f
     const val PLAYER_SLIDE = 0.20f
     const val VIDEO_FORWARD = 0.05f
@@ -31,8 +31,8 @@ internal object PosterGrid {
     const val SIGN_OUT_X = 0.82f
     const val SIGN_OUT_CONFIRM_TOP = 0.60f
     const val SIGN_OUT_CONFIRM_BOTTOM = 0.78f
-    const val PREV_X = 0.28f
-    const val NEXT_X = 0.72f
+    const val PREV_X = 0.18f
+    const val NEXT_X = 0.82f
 
     fun maxStart(total: Int): Int = (total - COLUMNS).coerceAtLeast(0)
 

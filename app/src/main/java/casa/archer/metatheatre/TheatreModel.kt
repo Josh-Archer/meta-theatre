@@ -270,13 +270,25 @@ class TheatreModel(
             SceneControl.TURN_LEFT -> onViewTurn?.invoke(-SceneControls.TURN_DEGREES)
             SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
             SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
-            SceneControl.EARTH -> earthControlsOpen.value = true
+            SceneControl.EARTH -> openEarthControls()
         }
         return true
     }
 
+    private var earthReturnToPlayer = false
     internal fun earthControl(control: EarthControl) {
-        if (control == EarthControl.DONE) earthControlsOpen.value = false else onEarthControl?.invoke(control)
+        if (control == EarthControl.DONE) {
+            earthControlsOpen.value = false
+            if (earthReturnToPlayer) showPlayer()
+            earthReturnToPlayer = false
+        } else onEarthControl?.invoke(control)
+    }
+
+    fun openEarthControls() {
+        if (!earthControlsOpen.value) earthReturnToPlayer = !libraryOpen.value
+        earthControlsOpen.value = true
+        libraryOpen.value = true
+        onWatching?.invoke(false)
     }
 
     fun earthControlPress(x: Float, y: Float): Boolean {
@@ -390,6 +402,7 @@ class TheatreModel(
     }
 
     fun togglePlayback() = player.toggle()
+    fun pausePlayback() = player.pause()
 
     fun seekBy(deltaMs: Long) = player.seekBy(deltaMs)
 
@@ -424,6 +437,7 @@ class TheatreModel(
             PlayerControl.AUDIO -> player.cycleAudio()
             PlayerControl.SUBTITLES -> player.cycleSubtitles()
             PlayerControl.QUIET -> toggleQuietCinema()
+            PlayerControl.EARTH -> openEarthControls()
         }
     }
 
