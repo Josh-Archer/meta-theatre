@@ -55,19 +55,37 @@ and the remaining checks on a Quest.
 
 ## Explore Earth
 
-Open the library and choose **Earth** along its bottom edge. Choose **North Pole**,
+Choose the large **Explore Earth** button on the movie's side menu or along the
+library's bottom edge. Choose **North Pole**,
 **South Pole**, **Equator**, or **Far side** to move around the globe. Earth stays
 ahead of you and your chair and screen stay with you. The orbit buttons move
 20 degrees around or 15 degrees toward a pole per press. A controller stick aimed
 at this menu also moves around the orbit. **Home seat** restores the original
-view and globe rotation; **Back to library** closes the menu.
+view and globe rotation; **Done** returns to the movie or library you came from.
 
 Point at exposed Earth outside the screen, hold an index/thumb pinch or controller
 trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
 **Spin left** and **Spin right** buttons turn it 15 degrees per press. Surface,
 clouds, and atmosphere rotate together, with the existing shared Sun illuminating
-the geography. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
+the geography. The visible hemisphere keeps the headset's local day/night cycle,
+including pole and far-side views. Distant planets keep their clear exhibit slots
+as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
+
+Open **Explore Earth → Weather settings → Live weather: On** to apply current
+weather to the hemisphere you are viewing. Earth uses 8K surface/city-light maps
+and 4K cloud detail, with cloud relief and shadows. The live cloud field is
+continuous rather than made from repeating cloud tiles. See the
+[quality checks](art/validation/EARTH_QUALITY.md). It starts off and saves your choice
+on the headset. Orbiting or spinning Earth selects a new region after the view
+settles; weather refreshes every 15 minutes while the app has focus. **Refresh**
+requests an update; **Off** restores the original cloud map.
+
+Cloud coverage and weather codes come from Open-Meteo. The cloud shapes are
+modeled representations of those conditions, not satellite imagery. The weather
+panel shows the model time and labels offline data. Only viewed coordinates are
+sent to the provider; the app does not request GPS permission or store weather
+locations on disk. See [weather authoring and validation](art/WEATHER.md).
 
 ## Selectable environments
 
@@ -81,6 +99,11 @@ Each environment remembers its own screen size, screen position, and seated view
 ## Plex
 
 On the library panel, choose Link Plex. The headset shows a code. On your phone, open https://plex.tv/link and enter it. Pick a server if you have more than one, then a library, a show, a season, and an episode.
+
+The selector and movie side menu have solid backings so the environment cannot
+show through. A white ring with a black outline and gold center marks the hand or
+controller ray on their controls. The grab frame remains available during movies.
+See [panel visibility checks](art/validation/PANEL_VISIBILITY.md).
 
 The search row searches the current shelf. Point at **Search titles** to open the
 on-panel keyboard, enter a title, then choose **Done**. Movie, TV, and Continue
@@ -97,6 +120,14 @@ a 1080p compatibility transcode at 20 Mbps. The player bar shows the actual deco
 resolution and labels the 1080p fallback. Lower-resolution sources remain lower
 resolution. See [UHD playback validation](art/validation/UHD_PLAYBACK.md) for checks
 and the remaining headset validation.
+
+Movies use an opaque compositor layer with a direct decoder surface. The side
+menu's **Input** line reports the selected video's color metadata: Dolby Vision,
+HDR10/PQ, HLG, SDR, or unspecified. **Original** keeps the source stream and its
+HDR metadata; a Plex transcode can change the color format even at 4K. Decoding
+uses the headset's native codecs, with decoder fallback enabled. See
+[viewpoint and video validation](art/validation/VIEWPOINT_VIDEO_REPAIR.md) for the
+local Dolby Vision/HDR10 decoder checks and their limits.
 
 The player rail has **Audio** and **Subtitles** buttons that cycle available
 tracks; subtitles include an **Off** choice. Original playback uses supported
@@ -117,6 +148,17 @@ The screen keeps its size and reappears in front of your current view, including
 after turning while it was hidden. A movie pauses while hidden and resumes its previous
 playback intent when restored; an already paused movie stays paused. The gesture
 also hides the library. Hidden screens do not accept movie or library presses.
+
+Hold one open hand up in front of you, palm facing away from you, for half a
+second to pause active media. Lower your hand before repeating. This only pauses;
+use **Play** or a screen tap to resume.
+
+Raise both open hands, palms facing away from you, and push forward to move the
+screen farther away. Turn both palms toward your face and pull back to bring it
+closer. Both hands must move together; no pinch or ray target is required. Pulling
+also brings a hidden screen back into your current view. The screen keeps its size
+and stops between 1.5 and 6 metres away. The native grab frame and resize corners
+remain available during playback: drag an edge to move or a corner to resize.
 
 To resize either the library or movie screen, aim both hands at its face, pinch
 with both index fingers and thumbs, then hold both pinches while moving your
@@ -159,7 +201,10 @@ to cover pagination, canceled navigation, search, playback intent, track
 selection, subtitle rendering, quiet-mode settings, scene-control hit regions,
 visitor capture/pull/rotation/release, and native-palm screen folding after a
 turn or recenter. Earth integration tests cover polar observer frames, spin
-gestures, panel occlusion, and shared lighting. These checks do not
+gestures, panel occlusion, and shared lighting. Stop-palm and two-hand depth checks
+cover buffering, tracking loss, turned views, and hidden-screen restoration.
+Native font rendering checks the larger side-menu labels and their hit targets.
+These checks do not
 replace playback and hand/controller testing on an awake Quest.
 
 ## 3D assets

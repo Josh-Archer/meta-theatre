@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,16 @@ private val Zone = Color(0xFF2A3342)
 
 @Composable
 fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
+    val libraryOpen by model.libraryOpen.collectAsState()
+    val hidden by model.screenHidden.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        LibraryContent(model, player)
+        PanelReticle(model, PointerPanel.LIBRARY, libraryOpen && !hidden)
+    }
+}
+
+@Composable
+private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
     val browse by model.browse.collectAsState()
     val loading by model.loading.collectAsState()
     val error by model.error.collectAsState()
@@ -70,6 +81,8 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
     val scenePickerOpen by model.scenePickerOpen.collectAsState()
+    val weatherOpen by model.weatherSettingsOpen.collectAsState()
+    val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
     }.collectAsState(initial = false)
@@ -77,8 +90,18 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val window = PosterGrid.window(tiles.size, page)
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, onPrimary = Color(0xFF1A1408))) {
+        if (!libraryOpen && movieReady) {
+            Box(Modifier.fillMaxSize().border(4.dp, Accent).semantics {
+                contentDescription = "Screen frame: drag edges to move, corners to resize"
+            })
+            return@MaterialTheme
+        }
         if (confirmSignOut) {
             SignOutPrompt(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && weatherOpen) {
+            WeatherMenu(model)
             return@MaterialTheme
         }
         if (earthOpen) {
@@ -329,7 +352,7 @@ private fun ShelfHeader(
             }
         }
         ZoneButton(
-            label = if (browse is Browse.Home) "Libraries" else if (movieReady && browse !is Browse.SignedOut) "Player" else "",
+            label = if (browse is Browse.Home) "Libraries" else if (movieReady) "Player" else "",
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.SIGN_OUT_X - PosterGrid.PLAYER_X),
         ) { if (browse is Browse.Home) model.openLibraries() else model.showPlayer() }
         ZoneButton(
@@ -431,7 +454,7 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.PREV_X),
         ) {}
         SceneControl.entries.forEachIndexed { index, control ->
-            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index])) {
+            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]), highlighted = control == SceneControl.EARTH) {
                 model.sceneControlPress(SceneControls.center(control), .96f)
             }
         }
@@ -445,10 +468,15 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
 @Composable
 private fun EarthMenu(model: TheatreModel, view: String) {
     Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
-        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("Explore Earth", color = Ink, fontSize = 36.sp)
-            Text(view, color = Accent, fontSize = 24.sp)
+        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp)) {
+            Column(Modifier.fillMaxHeight().weight(.72f), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                Text("Explore Earth", color = Ink, fontSize = 36.sp)
+                Text(view, color = Accent, fontSize = 24.sp)
+            }
+            ZoneButton("Weather settings", Modifier.fillMaxHeight().weight(.28f)) {
+                model.weatherSettingsOpen.value = true
+            }
         }
         EarthControls.rows.forEach { controls ->
             Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.ROW_HEIGHT).dp)) {
@@ -526,6 +554,38 @@ private fun ScenePickerMenu(model: TheatreModel) {
 }
 
 @Composable
+private fun WeatherMenu(model: TheatreModel) {
+    val weather by model.weatherUi.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Earth weather", color = Ink, fontSize = 36.sp)
+            Text("Follows the place on Earth you’re viewing", color = Accent, fontSize = 26.sp)
+        }
+        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.ROW).dp)) {
+            WeatherControl.entries.forEach { control ->
+                val label = if (control == WeatherControl.TOGGLE) "Live weather: ${if (weather.enabled) "On" else "Off"}" else control.label
+                ZoneButton(label, Modifier.fillMaxHeight().weight(1f), highlighted = control == WeatherControl.TOGGLE && weather.enabled) {
+                    model.weatherControl(control)
+                }
+            }
+        }
+        Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text(weather.message, color = if (weather.stale) Accent else Ink, fontSize = 30.sp)
+            weather.place?.let { Text(it.label(), color = Ink, fontSize = 28.sp) }
+            weather.reading?.let { reading ->
+                Text("${reading.pattern.title} · ${reading.cloudCover}% cloud · ${kotlin.math.round(reading.temperature).toInt()}°C", color = Ink, fontSize = 28.sp)
+                val time = java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm z", java.util.Locale.US)
+                    .withZone(java.time.ZoneId.systemDefault()).format(reading.time)
+                Text("Model time: $time", color = Muted, fontSize = 26.sp)
+            }
+            Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nRain, snow and storms are represented by their cloud shapes.", color = Muted, fontSize = 26.sp)
+            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. No headset location permission is used.", color = Muted, fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
 private fun SignedOut(model: TheatreModel) {
     Column(
         modifier = Modifier.fillMaxSize().padding(36.dp),
@@ -562,7 +622,7 @@ private fun Linking(code: String) {
 }
 
 @Composable
-private fun ZoneButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier = modifier
             .padding(6.dp)
@@ -574,7 +634,7 @@ private fun ZoneButton(label: String, modifier: Modifier, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         if (label.isNotBlank()) {
-            Text(label, color = Ink, fontSize = 20.sp, maxLines = 1)
+            Text(label, color = if (highlighted) Accent else Ink, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

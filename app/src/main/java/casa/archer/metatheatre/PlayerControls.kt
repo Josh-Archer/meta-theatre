@@ -3,7 +3,7 @@ package casa.archer.metatheatre
 internal enum class PlayerControl(val label: String) {
     BACK("−10s"), TOGGLE("Play"), FORWARD("+10s"), FORWARD_MORE("+30s"), LIBRARY("Library"),
     SMALLER("Smaller"), LARGER("Larger"), ORIGINAL("Original"), UHD("4K"), HD("1080p"),
-    AUDIO("Audio"), SUBTITLES("Subtitles"), QUIET("Quiet cinema"),
+    AUDIO("Audio"), SUBTITLES("Subtitles"), QUIET("Quiet cinema"), EARTH("Explore Earth"),
 }
 
 internal sealed interface PlayerTarget {

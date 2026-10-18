@@ -77,6 +77,7 @@ class TheatreActivity : AppSystemActivity() {
     private var solarRenderer: SolarRenderer? = null
     private var spaceVisitorRenderer: SpaceVisitorRenderer? = null
     private val solarUpdateSchedule = EarthUpdateSchedule()
+    private val weatherViewSchedule = EarthUpdateSchedule()
     private var earthLoad: Job? = null
     private var screen: Entity? = null
     private var grip: ScreenGripSystem? = null
@@ -85,6 +86,14 @@ class TheatreActivity : AppSystemActivity() {
     private var locomotionTargets: LocomotionTargets? = null
     private var immersiveFocused = false
     private val earthExploration = EarthExploration()
+    private val weather by lazy {
+        WeatherSession(scope, OpenMeteoWeather(),
+            render = { snapshot ->
+                earthRenderer?.setWeather(snapshot)
+                if (snapshot != null) Log.i("Weather", "Current orbital weather applied; cells=${snapshot.readings.size}")
+            },
+            publish = { value -> model.weatherUi.value = value })
+    }
     private var isdkSystem: IsdkSystem? = null
     private var videoReady = false
     private var videoWidth = EarthOrbit.screenWidth
@@ -110,11 +119,24 @@ class TheatreActivity : AppSystemActivity() {
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onEarthControl = ::onEarthControl
+        model.onWeatherEnabled = weather::setEnabled
+        model.onWeatherRefresh = weather::refresh
+        weather.setEnabled(model.state.liveWeatherEnabled)
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
         model.onLocationChanged = ::applyLocationChange
         model.onResetSceneSettings = ::applyResetSceneSettings
-        model.start()
+        // Local decoder fixtures must not race account restoration or make Plex requests.
+        val debugWeather = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            intent.getBooleanExtra("metatheatre.test_weather", false)
+        if (!debugWeather && (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_video", false))) model.start()
+        if (debugWeather) {
+            // In-memory diagnostic opt-in; never changes the user's saved weather or Plex session.
+            model.openEarthControls()
+            model.weatherSettingsOpen.value = true
+            weather.setEnabled(true)
+        }
         ticker = scope.launch {
             screenPlayer.transport.map { it.playing }.distinctUntilChanged().collectLatest { playing ->
                 if (playing) {
@@ -127,6 +149,7 @@ class TheatreActivity : AppSystemActivity() {
         }
     }
 
+    @OptIn(com.meta.spatial.core.SpatialSDKExperimentalAPI::class)
     override fun onSceneReady() {
         super.onSceneReady()
         scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
@@ -143,6 +166,7 @@ class TheatreActivity : AppSystemActivity() {
         // The distant Sun is projected inside the sky; keep close chair/panel depth precision.
         scene.setDepthParams(SolarSystem.NEAR_CLIP, SolarSystem.FAR_CLIP)
         scene.enableHolePunching(true)
+        scene.setColorSpace(com.meta.spatial.runtime.Scene.ColorSpace.REC709)
         scene.setLightingEnvironment(
             ambientColor = Vector3(0.06f, 0.07f, 0.09f),
             sunColor = Vector3(1.4f, 1.32f, 1.15f),
@@ -158,19 +182,19 @@ class TheatreActivity : AppSystemActivity() {
 
         locationEntities = buildLocation(currentLocation)
         spaceVisitorRenderer = SpaceVisitorRenderer().also {
-            it.setWorldFrame(earthExploration.worldFrame)
+            it.setWorldFrame(earthExploration.skyFrame)
             it.create()
             it.setPaused(quietCinema.active)
         }
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
             earthRenderer = earth
-            earth.setExploration(earthExploration.worldFrame, earthExploration.spin)
+            earth.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
             try {
                 earth.create()
                 val solar = SolarRenderer(this@TheatreActivity)
                 solarRenderer = solar
-                solar.setWorldFrame(earthExploration.worldFrame)
+                solar.setWorldFrame(earthExploration.skyFrame)
                 solar.create()
                 solar.setQuietCinema(quietCinema.active)
                 updateSolarEnvironment(force = true)
@@ -198,7 +222,7 @@ class TheatreActivity : AppSystemActivity() {
                 grabHandleCollisionWidths = Vector4(0.10f, 0.10f, 0.10f, 0.10f),
                 resizeCornerCollisionSizes = Vector4(0.22f, 0.22f, 0.22f, 0.22f),
                 outset = Vector4(0.04f, 0.04f, 0.04f, 0.04f),
-                zOffset = 0.02f,
+                zOffset = 0.08f,
                 color = Vector4(0.84f, 0.71f, 0.43f, 1f),
             ),
         )
@@ -208,6 +232,7 @@ class TheatreActivity : AppSystemActivity() {
                 panel, ::onScreenPress, ::onShelfScroll,
                 onPlayerVisibility = { model.playerControlsOpen.value = it },
                 playerTargets = model.playerHitTargets,
+                onPanelCursor = { model.panelCursor.value = it },
                 onPlayerControl = { control -> scope.launch { model.playerControl(control) } },
                 onSeek = { delta -> scope.launch { model.seekBy(delta) } },
                 onSeekPreview = { model.seekPreview.value = it },
@@ -221,6 +246,8 @@ class TheatreActivity : AppSystemActivity() {
                 onViewTurn = ::turnView,
                 earthTarget = { earthRenderer?.target() },
                 onEarthSpin = ::spinEarth,
+                onPause = { scope.launch { model.pausePlayback() } },
+                mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
                 onPoseSaved = { model.state.saveScreenPose(currentLocation, it) },
             )
@@ -249,8 +276,9 @@ class TheatreActivity : AppSystemActivity() {
         ensureVideo()
         val uri = fixture.toURI().toString()
         screenPlayer.play(Playable(
-            "4K display test", uri, uri, emptyMap(), "Local test pattern",
-            sourceWidth = 3840, sourceHeight = 2160,
+            intent.getStringExtra("metatheatre.test_label") ?: "4K display test", uri, uri, emptyMap(), "Local test fixture",
+            sourceWidth = intent.getIntExtra("metatheatre.test_width", 3840).coerceIn(1, 8192),
+            sourceHeight = intent.getIntExtra("metatheatre.test_height", 2160).coerceIn(1, 8192),
         ))
         model.libraryOpen.value = false
         applyWatching(true)
@@ -297,10 +325,11 @@ class TheatreActivity : AppSystemActivity() {
         screenPlayer.setScreenHidden(watching && hidden)
         val panel = screen ?: return
         Log.i(TAG, if (watching) "show movie" else "show library")
-        runCatching { panel.setComponent(Visible(!watching && !hidden)) }
+        // Keep the transparent panel carrier alive: ISDK grab/resize handles belong to it.
+        runCatching { panel.setComponent(Visible(!hidden)) }
         panel.setComponent(
             IsdkPanelResize(
-                enabled = !watching && !hidden,
+                enabled = !hidden,
                 resizeMode = ResizeMode.Relayout,
                 minDimensions = Vector2(1.2f, 1.2f * 9f / 16f),
                 maxDimensions = Vector2(8f, 8f * 9f / 16f),
@@ -324,6 +353,7 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSessionStateChanged(state: SessionState) {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
+        weather.setActive(immersiveFocused)
         handLocomotion?.enableHandLocomotion(immersiveFocused)
         if (!immersiveFocused) {
             locomotionTargets?.show(false)
@@ -347,6 +377,7 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onPause() {
         immersiveFocused = false
+        weather.setActive(false)
         spaceVisitorRenderer?.cancelGrab()
         grip?.cancelEarthGrab()
         handLocomotion?.enableHandLocomotion(false)
@@ -386,6 +417,10 @@ class TheatreActivity : AppSystemActivity() {
         // A solar cycle changes by only 0.0042 degrees per second; no frame-rate updates needed.
         updateSolarEnvironment()
         spaceVisitorRenderer?.update()
+        if (immersiveFocused && model.weatherUi.value.enabled && earthRenderer?.target() != null &&
+            weatherViewSchedule.shouldUpdate(SystemClock.uptimeMillis())) {
+            weather.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t))
+        }
     }
 
     private fun updateSolarEnvironment(force: Boolean = false) {
@@ -417,8 +452,7 @@ class TheatreActivity : AppSystemActivity() {
                             super.applyTo(options)
                             // Clear the scene at the video quad so its full-resolution underlay is visible.
                             // Mesh controls and the pointer can still draw in front of it.
-                            options.alphaMode = AlphaMode.HOLE_PUNCH
-                            options.panelShader = SceneMaterial.HOLE_PUNCH_PANEL_SHADER
+                            VideoPresentation.configure(options)
                         }
                     },
                 )
@@ -449,7 +483,7 @@ class TheatreActivity : AppSystemActivity() {
                     style = object : PanelStyleOptions(themeResourceId = R.style.PlayerPanelTheme) {
                         override fun applyTo(options: PanelConfigOptions) {
                             super.applyTo(options)
-                            options.alphaMode = AlphaMode.TRANSLUCENT
+                            PanelPresentation.configure(options)
                         }
                     },
                     display = DpDisplayOptions(
@@ -510,8 +544,13 @@ class TheatreActivity : AppSystemActivity() {
                         width = currentSize.width,
                         height = currentSize.height,
                     ),
-                    style = PanelStyleOptions(themeResourceId = R.style.PanelTheme),
-                    display = DpDisplayOptions(width = 1600f, height = 900f, dpi = 180),
+                    style = object : PanelStyleOptions(themeResourceId = R.style.PanelTheme) {
+                        override fun applyTo(options: PanelConfigOptions) {
+                            super.applyTo(options)
+                            PanelPresentation.configure(options)
+                        }
+                    },
+                    display = DpDisplayOptions(width = 1600f, height = 900f, dpi = 160),
                     rendering = UIPanelRenderOptions(PanelRenderMode.Mesh()),
                 )
             },
@@ -572,7 +611,7 @@ class TheatreActivity : AppSystemActivity() {
     private fun spinEarth(degrees: Float) {
         if (!immersiveFocused) return
         earthExploration.spinBy(degrees)
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
     }
 
     private fun onEarthControl(control: EarthControl) {
@@ -586,9 +625,9 @@ class TheatreActivity : AppSystemActivity() {
         }
         earthExploration.apply(control, scene.getViewerPose())
         model.earthViewLabel.value = earthExploration.label()
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin)
-        solarRenderer?.setWorldFrame(earthExploration.worldFrame)
-        spaceVisitorRenderer?.setWorldFrame(earthExploration.worldFrame)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
+        solarRenderer?.setWorldFrame(earthExploration.skyFrame)
+        spaceVisitorRenderer?.setWorldFrame(earthExploration.skyFrame)
         updateSolarEnvironment(force = true)
     }
 
@@ -602,6 +641,7 @@ class TheatreActivity : AppSystemActivity() {
             onMoviePress()
             return
         }
+        if (model.weatherControlPress(x, y)) return
         if (model.earthControlPress(x, y)) return
         if (model.scenePickerPress(x, y)) return
         if (model.sceneControlPress(x, y)) return

@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
@@ -22,12 +26,14 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w560dp-h1640dp-mdpi")
 @LooperMode(LooperMode.Mode.PAUSED)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayerBarIntegrationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private var model: TheatreModel? = null
 
     @After fun release() { model?.release() }
@@ -39,7 +45,7 @@ class PlayerBarIntegrationTest {
         `when`(player.transport).thenReturn(MutableStateFlow(Transport(
             title = "Movie", playWhenReady = true, playing = false,
             durationMs = 120_000, sourceWidth = 3840, sourceHeight = 2160,
-            videoWidth = 3840, videoHeight = 2160,
+            videoWidth = 3840, videoHeight = 2160, videoColor = "Dolby Vision",
         )))
         `when`(player.tracks).thenReturn(MutableStateFlow(PlaybackTracks(
             audio = listOf(PlaybackTrack("audio", "English")), selectedAudioId = "audio",
@@ -53,6 +59,24 @@ class PlayerBarIntegrationTest {
             Box(Modifier.requiredSize(560.dp, 1640.dp)) { PlayerBar(currentModel, player) }
         }
 
+        val buttonBounds = listOf("Pause", "＋  Larger", "−  Smaller", "Audio: English", "Subtitles: Off",
+            "Explore Earth", "Recently watched", "Quiet cinema: Off").map { label ->
+            val node = compose.onNodeWithText(label).assertIsDisplayed()
+            val layout = mutableListOf<TextLayoutResult>()
+            node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layout) }
+            assertTrue("Readable font for $label", layout.single().layoutInput.style.fontSize.value >= 26f)
+            val text = layout.single()
+            assertTrue("Unclipped height $label", text.multiParagraph.height <= text.size.height + 1f)
+            assertTrue("Unclipped width $label", text.getLineRight(0) <= text.size.width + 1f)
+            assertTrue("Complete label $label", text.getLineEnd(text.lineCount - 1, visibleEnd = true) == label.length)
+            node.fetchSemanticsNode().boundsInRoot
+        }
+        compose.onNodeWithText("Input: Dolby Vision").assertIsDisplayed()
+        for ((upper, lower) in buttonBounds.zipWithNext()) {
+            assertTrue("Sidebar controls must not overlap", upper.bottom <= lower.top)
+        }
+        compose.runOnIdle { captureUiFixture(compose.activity, "player-controls.png") }
+
         pressRail("Pause", PlayerControl.TOGGLE, currentModel)
         verify(player).toggle()
         pressRail("Audio: English", PlayerControl.AUDIO, currentModel)
@@ -64,6 +88,11 @@ class PlayerBarIntegrationTest {
         compose.runOnIdle {
             assertEquals(true, quietPreference)
             assertTrue(TheatreState(context).quietCinemaEnabled)
+        }
+        pressRail("Explore Earth", PlayerControl.EARTH, currentModel)
+        compose.runOnIdle {
+            assertTrue(currentModel.libraryOpen.value)
+            assertTrue(currentModel.earthControlsOpen.value)
         }
     }
 

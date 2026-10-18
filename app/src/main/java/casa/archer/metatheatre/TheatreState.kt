@@ -1,6 +1,7 @@
 package casa.archer.metatheatre
 
 import android.content.Context
+import androidx.core.content.edit
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Quaternion
 import com.meta.spatial.core.Vector3
@@ -10,6 +11,9 @@ import org.json.JSONObject
 /** Device-local settings and bookmarks. Credentials and playback/poster URLs are never stored here. */
 internal class TheatreState(context: Context) {
     private val prefs = context.getSharedPreferences("theatre_state", Context.MODE_PRIVATE)
+    val liveWeatherEnabled: Boolean
+        get() = prefs.getBoolean("live_weather_enabled", false)
+    fun saveLiveWeatherEnabled(enabled: Boolean) { prefs.edit { putBoolean("live_weather_enabled", enabled) } }
     val quietCinemaEnabled: Boolean
         get() = prefs.getBoolean("quiet_cinema_enabled", false)
     val history: WatchHistory = runCatching {

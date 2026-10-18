@@ -8,7 +8,7 @@ import org.junit.Test
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** Exercise the observer rebase used by all live environment renderers. */
+/** Geographic observer plus a stable distant exhibit and local-time lighting frame. */
 class EarthExplorationIntegrationTest {
     private val viewer = Pose(EarthRenderer.SEAT_EYE.copy())
     private fun point(expected: Vector3, actual: Vector3, tolerance: Float = .001f) {
@@ -50,6 +50,7 @@ class EarthExplorationIntegrationTest {
         exploration.spinBy(42f)
         exploration.apply(EarthControl.HOME, moved)
         assertEquals(Pose(), exploration.worldFrame)
+        assertEquals(Pose(), exploration.skyFrame)
         assertEquals(0f, exploration.spin, 0f)
         point(EarthRenderer.CENTER, exploration.earthPose().t)
         assertTrue(EarthRenderer.orientation().isWithinAngleDegrees(exploration.earthPose().q, .01f))
@@ -75,18 +76,18 @@ class EarthExplorationIntegrationTest {
         exploration.apply(EarthControl.NORTH_POLE, viewer)
         val frame = exploration.worldFrame
         val before = exploration.earthPose()
-        val sun = frame * SolarSystem.sunPosition(Instant.parse("2026-10-09T12:00:00Z"), ZoneOffset.UTC)
+        val sun = exploration.sunPosition(Instant.parse("2026-10-09T12:00:00Z"), ZoneOffset.UTC)
         exploration.apply(EarthControl.SPIN_RIGHT, viewer)
         assertEquals(frame, exploration.worldFrame)
         point(before.q * Vector3(0f, 1f, 0f), exploration.earthPose().q * Vector3(0f, 1f, 0f))
         assertFalse(before.q.isWithinAngleDegrees(exploration.earthPose().q, 10f))
-        point(sun, exploration.worldFrame * SolarSystem.sunPosition(Instant.parse("2026-10-09T12:00:00Z"), ZoneOffset.UTC), .5f)
+        point(sun, exploration.sunPosition(Instant.parse("2026-10-09T12:00:00Z"), ZoneOffset.UTC), .5f)
     }
 
     @Test fun sharedFramePreservesSunIncidenceMoonPhaseAndFlybyGeometry() {
         val exploration = EarthExploration()
         exploration.apply(EarthControl.SOUTH_POLE, viewer)
-        val frame = exploration.worldFrame
+        val frame = exploration.skyFrame
         val sun = SolarSystem.sunPosition(Instant.parse("2026-10-09T18:00:00Z"), ZoneOffset.UTC)
         for (body in SolarSystem.planets + SolarSystem.moonAt(Instant.parse("2026-10-09T18:00:00Z"), sun)) {
             val pointOnBody = body.center + body.rotation * Vector3(0f, 0f, body.radius)

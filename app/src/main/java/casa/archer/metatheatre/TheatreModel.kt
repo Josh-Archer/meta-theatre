@@ -78,11 +78,16 @@ class TheatreModel(
     val currentLocation = MutableStateFlow(state.currentLocation)
     var onLocationChanged: ((TheatreLocation) -> Unit)? = null
     var onResetSceneSettings: ((TheatreLocation) -> Unit)? = null
+    internal val weatherUi = MutableStateFlow(WeatherUi(enabled = state.liveWeatherEnabled))
+    val weatherSettingsOpen = MutableStateFlow(false)
+    internal var onWeatherEnabled: ((Boolean) -> Unit)? = null
+    internal var onWeatherRefresh: (() -> Unit)? = null
     var onScreenResize: ((Float) -> Unit)? = null
     var onQuietCinemaPreference: ((Boolean) -> Unit)? = null
     val quietCinemaEnabled = MutableStateFlow(state.quietCinemaEnabled)
     var onPlayerInteraction: (() -> Unit)? = null
     internal val playerHitTargets = PlayerHitTargets()
+    internal val panelCursor = MutableStateFlow<PanelCursor?>(null)
     internal val seekPreview = MutableStateFlow<Float?>(null)
 
     private val scope = CoroutineScope(
@@ -110,6 +115,7 @@ class TheatreModel(
         cancelBrowseWork()
         player.onProgress = null
         scope.cancel()
+        panelCursor.value = null
         onPrepareScreen = null
         onWatching = null
         onViewTurn = null
@@ -117,6 +123,8 @@ class TheatreModel(
         onEarthControl = null
         onLocationChanged = null
         onResetSceneSettings = null
+        onWeatherEnabled = null
+        onWeatherRefresh = null
         onScreenResize = null
         onQuietCinemaPreference = null
         onPlayerInteraction = null
@@ -164,7 +172,8 @@ class TheatreModel(
     fun back() {
         if (signOutConfirmation.value) { cancelSignOut(); return }
         if (scenePickerOpen.value) { closeScenePicker(); return }
-        if (earthControlsOpen.value) { earthControlsOpen.value = false; return }
+        if (weatherSettingsOpen.value) { weatherSettingsOpen.value = false; return }
+        if (earthControlsOpen.value) { earthControl(EarthControl.DONE); return }
         if (stack.size <= 1) return
         cancelBrowseWork()
         stack.removeLast()
@@ -278,7 +287,7 @@ class TheatreModel(
             SceneControl.TURN_LEFT -> onViewTurn?.invoke(-SceneControls.TURN_DEGREES)
             SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
             SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
-            SceneControl.EARTH -> earthControlsOpen.value = true
+            SceneControl.EARTH -> openEarthControls()
             SceneControl.SCENES -> openScenePicker()
         }
         return true
@@ -286,6 +295,8 @@ class TheatreModel(
 
     fun openScenePicker() {
         earthControlsOpen.value = false
+        weatherSettingsOpen.value = false
+        earthReturnToPlayer = false
         scenePickerOpen.value = true
     }
 
@@ -316,8 +327,48 @@ class TheatreModel(
         return true
     }
 
+    private var earthReturnToPlayer = false
     internal fun earthControl(control: EarthControl) {
-        if (control == EarthControl.DONE) earthControlsOpen.value = false else onEarthControl?.invoke(control)
+        if (control == EarthControl.DONE) {
+            earthControlsOpen.value = false
+            weatherSettingsOpen.value = false
+            if (earthReturnToPlayer) showPlayer()
+            earthReturnToPlayer = false
+        } else onEarthControl?.invoke(control)
+    }
+
+    fun openEarthControls() {
+        scenePickerOpen.value = false
+        if (!earthControlsOpen.value) earthReturnToPlayer = !libraryOpen.value
+        earthControlsOpen.value = true
+        libraryOpen.value = true
+        onWatching?.invoke(false)
+    }
+
+    internal fun weatherControl(control: WeatherControl) {
+        when (control) {
+            WeatherControl.DONE -> weatherSettingsOpen.value = false
+            WeatherControl.REFRESH -> onWeatherRefresh?.invoke()
+            WeatherControl.TOGGLE -> {
+                val enabled = !weatherUi.value.enabled
+                state.saveLiveWeatherEnabled(enabled)
+                weatherUi.value = WeatherUi(enabled, weatherUi.value.place, if (enabled) "Waiting for Earth view" else "Off · original cloud map")
+                onWeatherEnabled?.invoke(enabled)
+            }
+        }
+    }
+
+    fun weatherControlPress(x: Float, y: Float): Boolean {
+        if (!earthControlsOpen.value) return false
+        if (weatherSettingsOpen.value) {
+            WeatherControls.at(x, y)?.let(::weatherControl)
+            return true
+        }
+        if (WeatherControls.opener(x, y)) {
+            weatherSettingsOpen.value = true
+            return true
+        }
+        return false
     }
 
     fun earthControlPress(x: Float, y: Float): Boolean {
@@ -328,6 +379,7 @@ class TheatreModel(
 
     fun earthOrbitScroll(direction: Int): Boolean {
         if (!earthControlsOpen.value) return false
+        if (weatherSettingsOpen.value) return true
         if (direction != 0) earthControl(if (direction < 0) EarthControl.ORBIT_LEFT else EarthControl.ORBIT_RIGHT)
         return true
     }
@@ -431,6 +483,7 @@ class TheatreModel(
     }
 
     fun togglePlayback() = player.toggle()
+    fun pausePlayback() = player.pause()
 
     fun seekBy(deltaMs: Long) = player.seekBy(deltaMs)
 
@@ -465,6 +518,7 @@ class TheatreModel(
             PlayerControl.AUDIO -> player.cycleAudio()
             PlayerControl.SUBTITLES -> player.cycleSubtitles()
             PlayerControl.QUIET -> toggleQuietCinema()
+            PlayerControl.EARTH -> openEarthControls()
         }
     }
 

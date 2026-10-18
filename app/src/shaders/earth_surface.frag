@@ -7,22 +7,15 @@ layout(set = 3, binding = 1) uniform sampler2D dayMap;
 layout(set = 3, binding = 2) uniform sampler2D nightMap;
 layout(set = 3, binding = 3) uniform sampler2D normalMap;
 layout(set = 3, binding = 4) uniform sampler2D oceanMap;
+layout(set = 3, binding = 5) uniform sampler2D cloudMap;
 
 vec3 terrainNormal(vec3 normal) {
-    // Derivative basis supports this sphere's real UVs without a tangent vertex stream.
-    vec3 px = dFdx(earth.localPosition), py = dFdy(earth.localPosition);
-    vec2 tx = dFdx(earth.uv), ty = dFdy(earth.uv);
-    float determinant = tx.x * ty.y - tx.y * ty.x;
-    if (abs(determinant) < 1e-10) return normal;
-    vec3 tangent = (px * ty.y - py * tx.y) / determinant;
-    vec3 bitangent = (py * tx.x - px * ty.x) / determinant;
-    tangent = normalize(tangent - normal * dot(tangent, normal));
-    bitangent = normalize(bitangent - normal * dot(bitangent, normal));
+    mat3 frame = earthTangentFrame(normal);
     vec3 bump = decodeData(texture(normalMap, earth.uv).xyz) * 2.0 - 1.0;
     // Authored OpenGL normal's +Y points north, while glTF's increasing V points south.
     bump.y = -bump.y;
     bump.xy *= 0.28;
-    return normalize(mat3(tangent, bitangent, normal) * normalize(bump));
+    return normalize(frame * normalize(bump));
 }
 
 void main() {
@@ -31,7 +24,9 @@ void main() {
     float elevation = dot(normal, sun);
     float daylight = dayWeight(elevation);
     vec3 bumpNormal = terrainNormal(normal);
-    float diffuse = 0.08 + 0.92 * max(dot(bumpNormal, sun), 0.0);
+    float cloudDensity = texture(cloudMap, earth.uv + cloudSunOffset(sun, earthTangentFrame(normal), elevation)).a;
+    float cloudTransmission = exp(-cloudDensity * 1.15);
+    float diffuse = 0.065 + 0.935 * max(dot(bumpNormal, sun), 0.0) * cloudTransmission;
     vec3 day = texture(dayMap, earth.uv).rgb;
     vec3 city = texture(nightMap, earth.uv).rgb;
     float darkness = 1.0 - smoothstep(-0.12, 0.02, elevation);
@@ -40,8 +35,9 @@ void main() {
     vec3 halfVector = sun + view;
     // At midnight the two vectors can be opposite; prevent a zero normalization.
     if (dot(halfVector, halfVector) > 1e-6) {
-        float highlight = pow(max(dot(bumpNormal, normalize(halfVector)), 0.0), 72.0);
-        color += vec3(0.42) * linear_to_srgb(texture(oceanMap, earth.uv).r) * highlight * daylight;
+        float highlight = pow(max(dot(bumpNormal, normalize(halfVector)), 0.0), 160.0);
+        float fresnel = 0.035 + 0.965 * pow(1.0 - max(dot(normal, view), 0.0), 5.0);
+        color += vec3(2.4) * fresnel * linear_to_srgb(texture(oceanMap, earth.uv).r) * highlight * daylight * cloudTransmission;
     }
     float rim = pow(1.0 - clamp(dot(normal, view), 0.0, 1.0), 2.0);
     color += vec3(0.075, 0.018, 0.004) * exp(-abs(elevation) * 22.0) * rim;

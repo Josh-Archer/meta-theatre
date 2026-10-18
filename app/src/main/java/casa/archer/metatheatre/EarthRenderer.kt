@@ -13,6 +13,7 @@ import com.meta.spatial.runtime.AddressMode
 import com.meta.spatial.runtime.AlphaMode
 import com.meta.spatial.runtime.BlendMode
 import com.meta.spatial.runtime.DepthWrite
+import com.meta.spatial.runtime.DepthTest
 import com.meta.spatial.runtime.SamplerConfig
 import com.meta.spatial.runtime.SceneMaterial
 import com.meta.spatial.runtime.SceneMaterialAttribute
@@ -36,14 +37,21 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private val creators = mutableListOf<String>()
     private val entities = mutableListOf<Entity>()
     private var worldFrame = Pose()
+    private var skyFrame = Pose()
     private var spin = 0f
+    private var cloudMaterial: SceneMaterial? = null
+    private var surfaceMaterial: SceneMaterial? = null
+    private var originalCloudTexture: SceneTexture? = null
+    private var weatherTexture: SceneTexture? = null
+    private var weatherMap: WeatherCloudMap? = null
     private fun pose() = EarthExploration.renderPose(worldFrame, spin)
     internal fun target(): VisitorTarget? = if (entities.size != 3) null else
         VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
 
-    fun setExploration(frame: Pose, spinDegrees: Float) {
-        val moved = worldFrame != frame
+    fun setExploration(frame: Pose, spinDegrees: Float, lightingFrame: Pose) {
+        val moved = skyFrame != lightingFrame
         worldFrame = Pose(frame.t.copy(), frame.q.copy())
+        skyFrame = Pose(lightingFrame.t.copy(), lightingFrame.q.copy())
         spin = spinDegrees
         entities.forEach { it.setComponent(Transform(pose())) }
         if (moved) update()
@@ -64,7 +72,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
         // Decode off the UI thread; native texture/material upload and scene mutation stay on main.
         val sampler = SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)
         val gpuMaps = mutableMapOf<String, SceneTexture>()
-        // Keep at most one decoded 4K bitmap in memory during upload.
+        // Upload one source at a time, including native 8K day/city maps (128 MiB decoded).
         for (name in listOf("day.jpg", "night.jpg", "normal.jpg", "ocean.jpg", "clouds.png")) {
             val bitmap = withContext(Dispatchers.IO) {
                 activity.assets.open("earth/$name").use { input ->
@@ -77,13 +85,17 @@ class EarthRenderer(private val activity: TheatreActivity) {
                 bitmap.recycle()
             }
         }
-        val surface = material("earth_surface", listOf("dayMap", "nightMap", "normalMap", "oceanMap"))
+        val surface = material("earth_surface", listOf("dayMap", "nightMap", "normalMap", "oceanMap", "cloudMap"))
         surface.setTexture("dayMap", gpuMaps.getValue("day.jpg"))
         surface.setTexture("nightMap", gpuMaps.getValue("night.jpg"))
         surface.setTexture("normalMap", gpuMaps.getValue("normal.jpg"))
         surface.setTexture("oceanMap", gpuMaps.getValue("ocean.jpg"))
         val clouds = material("earth_clouds", listOf("cloudMap"), transparent = true)
-        clouds.setTexture("cloudMap", gpuMaps.getValue("clouds.png"))
+        originalCloudTexture = gpuMaps.getValue("clouds.png")
+        surfaceMaterial = surface
+        surface.setTexture("cloudMap", originalCloudTexture!!)
+        cloudMaterial = clouds
+        clouds.setTexture("cloudMap", originalCloudTexture!!)
         val atmosphere = material("earth_atmosphere", emptyList(), transparent = true)
         clouds.setRenderOrder(10)
         atmosphere.setRenderOrder(20)
@@ -104,12 +116,31 @@ class EarthRenderer(private val activity: TheatreActivity) {
         Log.i("Earth", "Dynamic Earth ready; local zone=${ZoneId.systemDefault()}, centered at equator/100W")
     }
 
+    internal suspend fun setWeather(snapshot: WeatherSnapshot?) {
+        val cloud = cloudMaterial ?: return
+        val bitmap = if (snapshot == null) null else withContext(Dispatchers.Default) {
+            val map = weatherMap ?: WeatherCloudMap.load(activity.assets).also { weatherMap = it }
+            map.build(snapshot)
+        }
+        val next = try {
+            bitmap?.let { SceneTexture(it, SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)) }
+        } finally { bitmap?.recycle() }
+        val cloudMap = next ?: checkNotNull(originalCloudTexture)
+        cloud.setTexture("cloudMap", cloudMap)
+        surfaceMaterial?.setTexture("cloudMap", cloudMap)
+        val previous = weatherTexture
+        weatherTexture = next
+        previous?.destroy()
+    }
+
     private fun material(shader: String, maps: List<String>, transparent: Boolean = false): SceneMaterial {
         val attributes = arrayOf(
             SceneMaterialAttribute("sunPosition", SceneMaterialDataType.Vector4),
             *maps.map { SceneMaterialAttribute(it, SceneMaterialDataType.Texture2D) }.toTypedArray(),
         )
         return SceneMaterial.custom(shader, attributes, if (transparent) AlphaMode.TRANSLUCENT else AlphaMode.OPAQUE).apply {
+            setDepthTest(DepthTest.LESS_OR_EQUAL)
+            setDepthWrite(if (transparent) DepthWrite.DISABLE else DepthWrite.ENABLE)
             if (transparent) {
                 setBlendMode(BlendMode.TRANSLUCENT)
                 setDepthWrite(DepthWrite.DISABLE)
@@ -118,7 +149,7 @@ class EarthRenderer(private val activity: TheatreActivity) {
     }
 
     fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.shaderSunPosition(worldFrame * SolarSystem.sunPosition(instant, zone))
+        val position = SolarSystem.shaderSunPosition(skyFrame * SolarSystem.sunPosition(instant, zone))
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 
@@ -129,6 +160,10 @@ class EarthRenderer(private val activity: TheatreActivity) {
 
     /** Called after Spatial SDK shuts down its scene and cached meshes. */
     fun release() {
+        cloudMaterial = null
+        surfaceMaterial = null
+        weatherTexture?.destroy(); weatherTexture = null
+        weatherMap = null
         materials.forEach { it.destroy() }
         textures.forEach { it.destroy() }
         entities.clear()

@@ -1,0 +1,53 @@
+{
+  "atlas": [
+    4096,
+    2048
+  ],
+  "tile": [
+    1024,
+    1024
+  ],
+  "columns": 4,
+  "rows": 2,
+  "patterns": [
+    "clear",
+    "cumulus",
+    "overcast",
+    "fog",
+    "rain_front",
+    "snow_bands",
+    "thunderhead",
+    "cirrus"
+  ],
+  "meshes": [
+    {
+      "name": "cumulus",
+      "triangles": 1104
+    },
+    {
+      "name": "overcast",
+      "triangles": 1480
+    },
+    {
+      "name": "fog",
+      "triangles": 1644
+    },
+    {
+      "name": "rain_front",
+      "triangles": 1372
+    },
+    {
+      "name": "snow_bands",
+      "triangles": 1372
+    },
+    {
+      "name": "thunderhead",
+      "triangles": 1188
+    },
+    {
+      "name": "cirrus",
+      "triangles": 560
+    }
+  ],
+  "runtime": "Density atlas on the existing Earth cloud shell; no added per-frame mesh draws."
+}

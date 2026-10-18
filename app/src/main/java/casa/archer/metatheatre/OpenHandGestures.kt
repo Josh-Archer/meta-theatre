@@ -38,9 +38,12 @@ internal object OpenHandPose {
 }
 
 internal data class OpenHandInput(val id: Int, val position: HandPoint, val normal: HandPoint, val aimingAtScreen: Boolean,
-                                  val inFrontOfScreen: Boolean = aimingAtScreen)
+                                  val inFrontOfScreen: Boolean = aimingAtScreen,
+                                  val viewerFacing: Float = 0f, val raisedInView: Boolean = false,
+                                  val viewPosition: HandPoint = position)
 internal enum class ScreenDirection { LEFT, RIGHT, UP, DOWN }
-internal data class OpenHandActions(val move: ScreenDirection? = null, val close: Boolean = false, val restore: Boolean = false)
+internal data class OpenHandActions(val move: ScreenDirection? = null, val close: Boolean = false, val restore: Boolean = false,
+                                    val pause: Boolean = false, val depthMeters: Float? = null)
 
 /** A deliberate open-hand stroke owns one action. Two closing palms take priority over swipes. */
 internal class OpenHandGestures {
@@ -52,16 +55,30 @@ internal class OpenHandGestures {
     private var blockedUntil = 0L
     private var restoreBlockedUntil = 0L
     private var clapLatched = false
+    private val depth = ScreenDepthGesture()
+    private val stop = StopPalmGesture()
 
-    fun reset() { strokes.clear(); clap = null; spread = null; clapLatched = false; blockedUntil = 0L; restoreBlockedUntil = 0L }
+    fun reset() { strokes.clear(); clap = null; spread = null; clapLatched = false; blockedUntil = 0L; restoreBlockedUntil = 0L; depth.reset(); stop.reset() }
 
     fun update(hands: List<OpenHandInput>, watching: Boolean, pinchingOrGripping: Boolean, now: Long,
-               screenHidden: Boolean = false): OpenHandActions {
+               screenHidden: Boolean = false, allowPause: Boolean = watching): OpenHandActions {
         if (pinchingOrGripping) {
+            depth.reset(); stop.reset()
             strokes.clear(); clap = null; spread = null; blockedUntil = now + 400L
             restoreBlockedUntil = now + 400L
             return OpenHandActions()
         }
+        val depthAction = depth.update(hands, now)
+        if (depthAction.owns) {
+            strokes.clear(); clap = null; spread = null; stop.reset()
+            return if (screenHidden) OpenHandActions(restore = depthAction.meters < -.01f)
+                else OpenHandActions(depthMeters = depthAction.meters)
+        }
+        if (allowPause && !screenHidden && now >= blockedUntil && stop.update(hands, now)) {
+            strokes.clear()
+            return OpenHandActions(pause = true)
+        }
+        if (!allowPause || screenHidden) stop.reset()
         if (screenHidden) {
             strokes.clear(); clap = null
             if (now < restoreBlockedUntil) { spread = null; return OpenHandActions() }
