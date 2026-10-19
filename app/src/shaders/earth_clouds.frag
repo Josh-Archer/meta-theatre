@@ -4,16 +4,22 @@
 #include "earth_fragment.glsl"
 layout(set = 3, binding = 1) uniform sampler2D cloudMap;
 
+vec2 densityGradient(vec2 stepSize) {
+    return vec2(
+        texture(cloudMap, earth.uv - vec2(stepSize.x, 0.0)).a - texture(cloudMap, earth.uv + vec2(stepSize.x, 0.0)).a,
+        texture(cloudMap, earth.uv - vec2(0.0, stepSize.y)).a - texture(cloudMap, earth.uv + vec2(0.0, stepSize.y)).a);
+}
+
 void main() {
     vec4 cloud = texture(cloudMap, earth.uv);
     float density = cloud.a;
     vec3 profile = cloudProfile(cloud);
-    vec2 texel = 1.0 / vec2(textureSize(cloudMap, 0));
+    // Resolve filaments and broad billows separately. A single one-texel slope
+    // becomes almost flat when viewed through lower mip levels from orbit.
+    vec2 detailStep = max(2.0 / vec2(textureSize(cloudMap, 0)), fwidth(earth.uv));
     vec3 normal = normalize(earth.localNormal);
     mat3 frame = earthTangentFrame(normal);
-    vec2 gradient = vec2(
-        texture(cloudMap, earth.uv - vec2(texel.x, 0.0)).a - texture(cloudMap, earth.uv + vec2(texel.x, 0.0)).a,
-        texture(cloudMap, earth.uv - vec2(0.0, texel.y)).a - texture(cloudMap, earth.uv + vec2(0.0, texel.y)).a);
+    vec2 gradient = densityGradient(detailStep) * 1.35 + densityGradient(detailStep * 4.0) * 0.55;
     vec3 billow = normalize(frame * normalize(vec3(gradient * (1.3 + profile.x * 2.2), 1.0)));
     vec3 sun = localSun();
     float elevation = dot(normal, sun);

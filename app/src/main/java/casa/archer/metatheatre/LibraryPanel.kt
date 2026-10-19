@@ -3,6 +3,7 @@ package casa.archer.metatheatre
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
@@ -521,6 +522,7 @@ private fun EarthSettingsMenu(model: TheatreModel) {
                         else -> control.label
                     }
                     ZoneButton(label, Modifier.fillMaxHeight().weight(1f),
+                        acceptPointerClick = control == EarthSetting.ABOVE_ME,
                         highlighted = control == EarthSetting.LOCATION && location || control == EarthSetting.ROTATION && rotation) {
                         model.earthSetting(control)
                     }
@@ -638,15 +640,19 @@ private fun Linking(code: String) {
 }
 
 @Composable
-private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false, onClick: () -> Unit) {
+private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false,
+    acceptPointerClick: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier = modifier
             .padding(6.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(if (label.isBlank()) Color.Transparent else Zone)
-            .semantics {
+            // Recenter is idempotent and accepts SDK pointer clicks as well as the
+            // custom hand ray. Keep toggles on their existing single input path.
+            .then(if (acceptPointerClick) Modifier.clickable(enabled = label.isNotBlank(), role = Role.Button, onClick = onClick)
+            else Modifier.semantics {
                 if (label.isNotBlank()) { role = Role.Button; onClick { onClick(); true } }
-            },
+            }),
         contentAlignment = Alignment.Center,
     ) {
         if (label.isNotBlank()) {

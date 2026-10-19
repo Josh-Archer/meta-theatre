@@ -87,13 +87,24 @@ class TheatreActivity : AppSystemActivity() {
     private var immersiveFocused = false
     private val earthExploration = EarthExploration()
     private val currentLocation by lazy {
-        EarthLocationSession(scope, AndroidEarthLocation(this),
-            publish = { model.locationMessage.value = it },
+        EarthLocationSession(scope, AndroidEarthLocation(this, diagnostic = {
+            if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) Log.i("EarthLocation", it)
+        }),
+            publish = {
+                model.locationMessage.value = it
+                Log.i("EarthLocation", it) // Only fixed UI messages, never coordinates or provider payloads.
+            },
             center = { place ->
                 grip?.cancelEarthGrab()
                 spaceVisitorRenderer?.cancelGrab()
                 earthExploration.viewLocation(place, scene.getViewerPose())
                 syncEarthView()
+                if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+                    intent.getBooleanExtra("metatheatre.test_location", false)) {
+                    val error = place.distance(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t))
+                    check(error < .1) { "Geographic centering failed" }
+                    Log.i("EarthLocation", "Native location centering diagnostic passed")
+                }
             })
     }
     private val weather by lazy {
@@ -118,7 +129,8 @@ class TheatreActivity : AppSystemActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val diagnostic = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
-            listOf("metatheatre.test_video", "metatheatre.test_weather", "metatheatre.test_earth_controls")
+            listOf("metatheatre.test_video", "metatheatre.test_weather", "metatheatre.test_earth_controls",
+                "metatheatre.test_location", "metatheatre.test_cloud_fixture")
                 .any { intent.getBooleanExtra(it, false) }
         model.onPrepareScreen = { ensureVideo() }
         model.onWatching = { watching -> applyWatching(watching) }
@@ -143,7 +155,6 @@ class TheatreActivity : AppSystemActivity() {
         }
         model.onEarthZoom = { control ->
             if (immersiveFocused) {
-                currentLocation.manualView()
                 grip?.cancelEarthGrab()
                 spaceVisitorRenderer?.cancelGrab()
                 when (control) {
@@ -170,7 +181,9 @@ class TheatreActivity : AppSystemActivity() {
         }
         model.onWeatherEnabled = weather::setEnabled
         model.onWeatherRefresh = weather::refresh
-        weather.setEnabled(model.state.liveWeatherEnabled)
+        val cloudFixture = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            intent.getBooleanExtra("metatheatre.test_cloud_fixture", false)
+        weather.setEnabled(!cloudFixture && model.state.liveWeatherEnabled)
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
         // Local decoder fixtures must not race account restoration or make Plex requests.
@@ -305,6 +318,18 @@ class TheatreActivity : AppSystemActivity() {
         model.sceneReady()
         runVideoSurfaceTest()
         runEarthControlsTest()
+        runLocationTest()
+    }
+
+    /** Exercise the real Above me button callback, only with existing user opt-in and permission. */
+    private fun runLocationTest() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_location", false) || !model.useCurrentLocation.value ||
+            androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        model.openEarthControls()
+        model.earthSettingsOpen.value = true
+        model.earthSetting(EarthSetting.ABOVE_ME)
     }
 
     /** Native transform/zoom smoke test, using a synthetic region and no saved location or Plex account. */
@@ -314,6 +339,7 @@ class TheatreActivity : AppSystemActivity() {
         scope.launch {
             delay(1_000)
             try {
+                earthLoad?.join()
                 val panel = checkNotNull(screen)
                 val before = panel.getComponent<Transform>().transform.let { Pose(it.t.copy(), it.q.copy()) }
                 val size = grip?.screenSize()
@@ -330,6 +356,13 @@ class TheatreActivity : AppSystemActivity() {
                 check(before == panel.getComponent<Transform>().transform && size == grip?.screenSize())
                 check(origin == scene.getViewOrigin() && yaw == scene.getViewSceneRotation())
                 Log.i(TAG,"Earth controls diagnostic passed; geographic recenter, safe zoom, screen and view origin preserved")
+                if (intent.getBooleanExtra("metatheatre.test_cloud_fixture", false)) {
+                    val snapshot = WeatherSnapshot(fixture, WeatherPlace.grid(fixture).map {
+                        WeatherReading(it, Instant.now(), 95, 85, 12.0, 140.0)
+                    })
+                    checkNotNull(earthRenderer).setWeather(snapshot)
+                    Log.i(TAG, "Diagnostic 8K storm cloud field applied at maximum orbital zoom")
+                }
             } catch (problem: Exception) {
                 Log.e(TAG,"Earth controls diagnostic failed (${problem.javaClass.simpleName})")
             }
@@ -673,6 +706,9 @@ class TheatreActivity : AppSystemActivity() {
 
     private fun requestEarthLocation() {
         if (!model.useCurrentLocation.value) return
+        // Explicit user input must also work after a diagnostic launch disabled automatic location.
+        currentLocation.setEnabled(true)
+        model.locationMessage.value = "Requesting your approximate location…"
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST)

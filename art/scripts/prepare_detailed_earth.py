@@ -25,8 +25,9 @@ with Image.open(SOURCE/'8k_earth_nightmap.jpg') as image:
 with Image.open(SOURCE/'8k_earth_specular_map.tif') as image:
     image.convert('RGB').resize((4096,2048),Image.Resampling.LANCZOS).save(OUT/'ocean.jpg',quality=98,subsampling=0,optimize=True)
 with Image.open(SOURCE/'8k_earth_clouds.jpg') as image:
-    alpha=image.convert('L').resize((4096,2048),Image.Resampling.LANCZOS)
+    # Preserve the original fine filaments for close orbital views.
+    alpha=image.convert('L')
     alpha=alpha.point([round(min(.98,(v/255)**1.02)*255) for v in range(256)])
     cloud=Image.new('RGBA',alpha.size,(255,255,255,0));cloud.putalpha(alpha);cloud.save(OUT/'clouds.png')
 for name in ['day.jpg','night.jpg','ocean.jpg','clouds.png']:shutil.copyfile(OUT/name,RUNTIME/name)
-print('Earth: native 8K day/city lights, 4K ocean/cloud detail; original 4K terrain normals retained')
+print('Earth: native 8K day/city/cloud detail, 4K ocean and terrain normals')

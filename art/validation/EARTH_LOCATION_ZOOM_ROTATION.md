@@ -34,12 +34,13 @@ ephemeris. Viewing presets now include zoom; older preset JSON defaults to 1×.
 
 There is no app GPS, IP-geolocation request, background subscription, coordinate
 logging, or automatic location disk cache. The provider fix must have finite
-in-range coordinates, usable accuracy, and an elapsed timestamp within five
-minutes (allowing ten seconds of future clock tolerance). A request times out
-after 20 seconds. Disabled location, missing permissions, stale fixes and provider
+in-range coordinates, usable accuracy, and an elapsed timestamp within thirty
+seconds (allowing ten seconds of future clock tolerance). As requested, there is
+no last-known fallback. A request waits for fresh foreground network updates for
+up to 45 seconds. Disabled location, missing permissions, old fixes and provider
 failures produce guidance without moving to a guessed location. Disabling the
-setting, backgrounding the app, or manually navigating cancels the pending lookup.
-Late native callbacks cannot resume canceled requests.
+setting, backgrounding the app, or changing the orbital region/spin cancels the
+lookup. Zooming preserves it. Late callbacks cannot move the view.
 
 Only the on/off preference is saved automatically. Explicitly saved viewing
 presets can retain a geographic view in private app storage. When live weather
@@ -47,7 +48,7 @@ is also enabled, its existing viewed-region request can include the user's
 region; the settings menu explains this. Debug video/weather/navigation fixtures
 skip both Plex account restoration and real device-location lookup.
 
-## Evidence
+## Initial control-release evidence
 
 - `testDebugUnitTest assembleDebug lintDebug` passed: 195 tests, zero test
   failures, zero lint errors, 43 lint warnings. Twelve tests were added across
@@ -73,6 +74,10 @@ comfort and stereo appearance still need an in-headset check. No real geographic
 location was obtained or published for validation. The normal app is relaunched
 after diagnostics. Raw logs, preference hashes, screenshots and APKs stay local
 and ignored by Git.
+
+The follow-up in [EARTH_CLOSE_CLOUDS_LOCATION.md](EARTH_CLOSE_CLOUDS_LOCATION.md)
+adds native pointer clicks for Above me, a real provider/centering diagnostic,
+visible waiting/cancellation states, and native 8K cloud optical depth.
 
 ## Primary references
 

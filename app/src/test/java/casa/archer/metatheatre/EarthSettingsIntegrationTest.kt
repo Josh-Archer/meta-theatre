@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.*
@@ -55,6 +56,9 @@ class EarthSettingsIntegrationTest {
             assertEquals(listOf(true),locationRequests)
             assertTrue(TheatreState(context).useCurrentLocation)
             press("Above me");assertEquals(1,refreshes)
+            // The SDK can deliver a native Compose click instead of the custom hand ray.
+            compose.onNodeWithText("Above me").performClick()
+            assertEquals(2,refreshes)
             press("Real-time rotation: On")
             assertEquals(false,rotation);assertFalse(TheatreState(context).realEarthRotationEnabled)
             press("Closer to Earth");press("Farther from Earth");press("Reset zoom")

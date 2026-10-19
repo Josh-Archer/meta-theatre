@@ -13,7 +13,7 @@ Changes by Meta Theatre: downsampling; linear-space lighting and twilight masks;
 separation and intensity adjustment of city lights; terrain-normal shading;
 ocean highlights; cloud shadows; transparent cloud deck; atmospheric rim;
 UV-mapped sphere meshes and Blender, glTF and Unreal material authoring.
-The detailed orbital renderer retains native 8K day/city-light detail, 4K ocean
-and cloud maps, directional cloud relief, land/cloud shadows and ocean Fresnel.
+The detailed orbital renderer retains native 8K day/city-light/cloud detail,
+4K ocean maps, directional cloud relief, land/cloud shadows and ocean Fresnel.
 
 Attribution must travel with redistributed source textures and derived Earth assets.

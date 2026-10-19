@@ -40,7 +40,7 @@ class WeatherCloudMapIntegrationTest {
         north.recycle(); east.recycle()
     }
 
-    @Test fun packagedEarthMapsUseTheOriginal8KDetailAnd4KCloudField() {
+    @Test fun packagedEarthMapsUseTheOriginal8KDetailIncludingClouds() {
         val assets=RuntimeEnvironment.getApplication().assets
         fun size(name:String):Pair<Int,Int>{
             val options=BitmapFactory.Options().apply{inJustDecodeBounds=true}
@@ -49,7 +49,8 @@ class WeatherCloudMapIntegrationTest {
         }
         assertEquals(8192 to 4096,size("earth/day.jpg"))
         assertEquals(8192 to 4096,size("earth/night.jpg"))
-        for(name in listOf("earth/normal.jpg","earth/ocean.jpg","earth/clouds.png","weather/cloud_structure.png"))
+        assertEquals(8192 to 4096,size("earth/clouds.png"))
+        for(name in listOf("earth/normal.jpg","earth/ocean.jpg","weather/cloud_structure.png"))
             assertEquals(4096 to 2048,size(name))
     }
 
@@ -62,7 +63,7 @@ class WeatherCloudMapIntegrationTest {
         val center=WeatherPlace(0.0,-100.0)
         val clear=map.build(grid(center,0,0))
         val cloudy=map.build(grid(center,3,100))
-        assertEquals(4096,clear.width);assertEquals(2048,clear.height)
+        assertEquals(8192,clear.width);assertEquals(4096,clear.height)
         assertEquals(original.width,clear.width);assertEquals(original.height,clear.height)
         val x=(80.0/360*clear.width).toInt();val y=clear.height/2
         val values=mutableListOf<Int>()
