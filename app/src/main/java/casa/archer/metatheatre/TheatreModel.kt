@@ -77,6 +77,10 @@ class TheatreModel(
     internal var onEarthControl: ((EarthControl) -> Unit)? = null
     val earthControlsOpen = MutableStateFlow(false)
     val earthViewLabel = MutableStateFlow("Equator")
+    val scenePickerOpen = MutableStateFlow(false)
+    val currentLocation = MutableStateFlow(state.currentLocation)
+    var onLocationChanged: ((TheatreLocation) -> Unit)? = null
+    var onResetSceneSettings: ((TheatreLocation) -> Unit)? = null
     internal val weatherUi = MutableStateFlow(WeatherUi(enabled = state.liveWeatherEnabled))
     val weatherSettingsOpen = MutableStateFlow(false)
     val earthSettingsOpen = MutableStateFlow(false)
@@ -139,6 +143,8 @@ class TheatreModel(
         onViewTurn = null
         onVisitorsReturn = null
         onEarthControl = null
+        onLocationChanged = null
+        onResetSceneSettings = null
         onWeatherEnabled = null
         onWeatherRefresh = null
         onScreenResize = null
@@ -194,6 +200,9 @@ class TheatreModel(
 
     fun back() {
         if (signOutConfirmation.value) { cancelSignOut(); return }
+        if (scenePickerOpen.value) { closeScenePicker(); return }
+        if (weatherSettingsOpen.value) { weatherSettingsOpen.value = false; return }
+        if (earthControlsOpen.value) { earthControl(EarthControl.DONE); return }
         if (stack.size <= 1) return
         cancelBrowseWork()
         stack.removeLast()
@@ -308,6 +317,41 @@ class TheatreModel(
             SceneControl.TURN_RIGHT -> onViewTurn?.invoke(SceneControls.TURN_DEGREES)
             SceneControl.RETURN_MODELS -> onVisitorsReturn?.invoke()
             SceneControl.EARTH -> openEarthControls()
+            SceneControl.SCENES -> openScenePicker()
+        }
+        return true
+    }
+
+    fun openScenePicker() {
+        earthControlsOpen.value = false
+        weatherSettingsOpen.value = false
+        earthReturnToPlayer = false
+        scenePickerOpen.value = true
+    }
+
+    fun closeScenePicker() {
+        scenePickerOpen.value = false
+    }
+
+    fun selectLocation(location: TheatreLocation) {
+        currentLocation.value = location
+        state.saveLocation(location)
+        onLocationChanged?.invoke(location)
+    }
+
+    fun resetCurrentLocationToDefault() {
+        val loc = currentLocation.value
+        state.resetSceneSettings(loc)
+        onResetSceneSettings?.invoke(loc)
+    }
+
+    fun scenePickerPress(x: Float, y: Float): Boolean {
+        if (!scenePickerOpen.value) return false
+        when (val action = ScenePickerControls.at(x, y)) {
+            is ScenePickerAction.SelectLocation -> selectLocation(action.location)
+            ScenePickerAction.ResetDefault -> resetCurrentLocationToDefault()
+            ScenePickerAction.Done -> closeScenePicker()
+            null -> Unit
         }
         return true
     }
@@ -325,6 +369,7 @@ class TheatreModel(
     }
 
     fun openEarthControls() {
+        scenePickerOpen.value = false
         if (!earthControlsOpen.value) earthReturnToPlayer = !libraryOpen.value
         earthControlsOpen.value = true
         libraryOpen.value = true

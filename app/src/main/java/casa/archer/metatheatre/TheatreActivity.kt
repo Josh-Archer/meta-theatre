@@ -86,7 +86,7 @@ class TheatreActivity : AppSystemActivity() {
     private var locomotionTargets: LocomotionTargets? = null
     private var immersiveFocused = false
     private val earthExploration = EarthExploration()
-    private val currentLocation by lazy {
+    private val deviceLocation by lazy {
         EarthLocationSession(scope, AndroidEarthLocation(this, diagnostic = {
             if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) Log.i("EarthLocation", it)
         }),
@@ -121,6 +121,8 @@ class TheatreActivity : AppSystemActivity() {
     private var videoHeight = EarthOrbit.screenHeight
     private val playerWidth = Stage.PLAYER_WIDTH
     private val playerHeight = Stage.PLAYER_HEIGHT
+    private var currentLocation = TheatreLocation.EARTH_ORBIT
+    private var locationEntities: List<Entity> = emptyList()
 
     override fun registerFeatures(): List<SpatialFeature> {
         return listOf(VRFeature(this, shouldConsumeLeftRightInput = false, inputSystemType = VrInputSystemType.INTERACTION_SDK, handMicrogestureLocomotion = true), ComposeFeature())
@@ -143,9 +145,9 @@ class TheatreActivity : AppSystemActivity() {
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onEarthControl = ::onEarthControl
         earthExploration.setRealRotation(model.state.realEarthRotationEnabled)
-        currentLocation.setEnabled(!diagnostic && model.state.useCurrentLocation)
+        deviceLocation.setEnabled(!diagnostic && model.state.useCurrentLocation)
         model.onLocationEnabled = { enabled ->
-            currentLocation.setEnabled(enabled)
+            deviceLocation.setEnabled(enabled)
             if (enabled) requestEarthLocation()
         }
         model.onLocationRequest = ::requestEarthLocation
@@ -186,6 +188,8 @@ class TheatreActivity : AppSystemActivity() {
         weather.setEnabled(!cloudFixture && model.state.liveWeatherEnabled)
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
+        model.onLocationChanged = ::applyLocationChange
+        model.onResetSceneSettings = ::applyResetSceneSettings
         // Local decoder fixtures must not race account restoration or make Plex requests.
         val debugWeather = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
             intent.getBooleanExtra("metatheatre.test_weather", false)
@@ -212,7 +216,14 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSceneReady() {
         super.onSceneReady()
         scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
-        scene.setViewOrigin(0f, 0f, 0f, 0f)
+        currentLocation = model.state.currentLocation
+        val initialSettings = model.state.sceneSettings(currentLocation)
+        scene.setViewOrigin(
+            initialSettings.seat.x,
+            initialSettings.seat.y,
+            initialSettings.seat.z,
+            initialSettings.seat.yaw,
+        )
         nativeHands?.close()
         nativeHands = NativeHands(scene)
         // The distant Sun is projected inside the sky; keep close chair/panel depth precision.
@@ -232,7 +243,7 @@ class TheatreActivity : AppSystemActivity() {
         }
         locomotionTargets = LocomotionTargets()
 
-        buildLocation(TheatreLocation.EARTH_ORBIT)
+        locationEntities = buildLocation(currentLocation)
         spaceVisitorRenderer = SpaceVisitorRenderer().also {
             it.setWorldFrame(earthExploration.skyFrame)
             it.create()
@@ -261,8 +272,8 @@ class TheatreActivity : AppSystemActivity() {
         // Grip-to-move is ScreenGripSystem. The video panel waits until playback.
         val panel = Entity.create(
             Panel(R.id.library_panel, MeshCollision.LineTest),
-            Transform(EarthOrbit.screenPose),
-            IsdkPanelDimensions(Vector2(EarthOrbit.screenWidth, EarthOrbit.screenHeight)),
+            Transform(initialSettings.screenPose),
+            IsdkPanelDimensions(Vector2(initialSettings.screenSize.width, initialSettings.screenSize.height)),
             IsdkPanelResize(
                 enabled = true,
                 resizeMode = ResizeMode.Relayout,
@@ -290,7 +301,7 @@ class TheatreActivity : AppSystemActivity() {
                 onSeek = { delta -> scope.launch { model.seekBy(delta) } },
                 onSeekPreview = { model.seekPreview.value = it },
                 onSeekFraction = { fraction -> scope.launch { model.seekToFraction(fraction) } },
-                onSizeSaved = { model.state.saveSize(it) },
+                onSizeSaved = { model.state.saveSize(currentLocation, it) },
                 readOpenHands = { nativeHands?.read().orEmpty() },
                 onScreenHiddenChange = { hidden -> scope.launch { model.setScreenHidden(hidden) } },
                 handsNavigating = { handLocomotion?.areHandsInUse() == true },
@@ -302,10 +313,12 @@ class TheatreActivity : AppSystemActivity() {
                 onPause = { scope.launch { model.pausePlayback() } },
                 mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
+                onPoseSaved = { model.state.saveScreenPose(currentLocation, it) },
             )
             grip = system
             system.screenHidden = model.screenHidden.value
-            system.restoreSize(model.state.screenSize())
+            system.restoreSize(initialSettings.screenSize)
+            system.restorePose(initialSettings.screenPose)
             systemManager.registerLateSystem(system)
         }
         if (isdkSystem == null) {
@@ -314,7 +327,7 @@ class TheatreActivity : AppSystemActivity() {
             }
         }
         Log.i(TAG, "theatre screen spawned")
-        currentLocation.setActive(immersiveFocused)
+        deviceLocation.setActive(immersiveFocused)
         model.sceneReady()
         runVideoSurfaceTest()
         runEarthControlsTest()
@@ -391,7 +404,7 @@ class TheatreActivity : AppSystemActivity() {
         val parent = screen ?: return
         if (videoReady) return
         videoReady = true
-        val size = grip?.screenSize() ?: ScreenSize(EarthOrbit.screenWidth, EarthOrbit.screenHeight)
+        val size = grip?.screenSize() ?: model.state.screenSize()
         videoWidth = size.width
         videoHeight = size.height
         val parked = Pose(Vector3(0f, -8f, 0f))
@@ -455,7 +468,7 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSessionStateChanged(state: SessionState) {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
-        currentLocation.setActive(immersiveFocused && screen != null)
+        deviceLocation.setActive(immersiveFocused && screen != null)
         weather.setActive(immersiveFocused)
         handLocomotion?.enableHandLocomotion(immersiveFocused)
         if (!immersiveFocused) {
@@ -466,7 +479,13 @@ class TheatreActivity : AppSystemActivity() {
         // Resample civil time immediately after focus/visibility changes, including headset wake.
         updateSolarEnvironment(force = true)
         when (state) {
-            SessionState.VISIBLE -> { screenPlayer.onMenuOpened(); model.saveCheckpoint(); grip?.saveScreenSize() }
+            SessionState.VISIBLE -> {
+                screenPlayer.onMenuOpened()
+                model.saveCheckpoint()
+                grip?.saveScreenSize()
+                grip?.saveScreenPose()
+                saveCurrentSceneSettings()
+            }
             SessionState.FOCUSED -> screenPlayer.onMenuClosed()
             else -> Unit
         }
@@ -474,7 +493,7 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onPause() {
         immersiveFocused = false
-        currentLocation.setActive(false)
+        deviceLocation.setActive(false)
         weather.setActive(false)
         spaceVisitorRenderer?.cancelGrab()
         grip?.cancelEarthGrab()
@@ -482,11 +501,15 @@ class TheatreActivity : AppSystemActivity() {
         locomotionTargets?.show(false)
         model.saveCheckpoint()
         grip?.saveScreenSize()
+        grip?.saveScreenPose()
+        saveCurrentSceneSettings()
         super.onPause()
     }
 
     override fun onDestroy() {
         grip?.saveScreenSize()
+        grip?.saveScreenPose()
+        saveCurrentSceneSettings()
         nativeHands?.close()
         nativeHands = null
         handLocomotion = null
@@ -634,10 +657,11 @@ class TheatreActivity : AppSystemActivity() {
                 }
             },
             settingsCreator = {
+                val currentSize = model.state.sceneSettings(currentLocation).screenSize
                 UIPanelSettings(
                     shape = QuadShapeOptions(
-                        width = EarthOrbit.screenWidth,
-                        height = EarthOrbit.screenHeight,
+                        width = currentSize.width,
+                        height = currentSize.height,
                     ),
                     style = object : PanelStyleOptions(themeResourceId = R.style.PanelTheme) {
                         override fun applyTo(options: PanelConfigOptions) {
@@ -657,22 +681,67 @@ class TheatreActivity : AppSystemActivity() {
         spaceVisitorRenderer?.cancelGrab()
         grip?.cancelEarthGrab()
         scene.updateViewOrigin(0f, degrees)
+        model.state.saveSeat(currentLocation, currentSeatSetting())
+    }
+
+    private fun currentSeatSetting(): SeatSetting {
+        val origin = runCatching { scene.getViewOrigin() }.getOrNull()
+        val yaw = runCatching { scene.getViewSceneRotation() }.getOrNull() ?: 0f
+        return SeatSetting(origin?.x ?: 0f, origin?.y ?: 0f, origin?.z ?: 0f, yaw)
+    }
+
+    private fun saveCurrentSceneSettings() {
+        val g = grip ?: return
+        val seat = currentSeatSetting()
+        val size = g.screenSize()
+        val pose = g.screenPose()
+        model.state.saveSceneSettings(currentLocation, SceneSettings(size, pose, seat))
+    }
+
+    private fun applyLocationChange(location: TheatreLocation) {
+        if (currentLocation == location && locationEntities.isNotEmpty()) return
+        saveCurrentSceneSettings()
+        locationEntities.forEach { it.destroy() }
+        currentLocation = location
+        model.state.currentLocation = location
+        locationEntities = buildLocation(location)
+        val settings = model.state.sceneSettings(location)
+        scene.setViewOrigin(settings.seat.x, settings.seat.y, settings.seat.z, settings.seat.yaw)
+        grip?.let { g ->
+            g.restoreSize(settings.screenSize)
+            g.restorePose(settings.screenPose)
+            g.syncOverlays(force = true)
+        }
+        Log.i(TAG, "switched to environment ${location.id}")
+    }
+
+    private fun applyResetSceneSettings(location: TheatreLocation) {
+        if (location != currentLocation) return
+        val defaults = defaultSceneSettings(location)
+        scene.setViewOrigin(defaults.seat.x, defaults.seat.y, defaults.seat.z, defaults.seat.yaw)
+        grip?.let { g ->
+            g.restoreSize(defaults.screenSize)
+            g.restorePose(defaults.screenPose)
+            g.syncOverlays(force = true)
+        }
+        Log.i(TAG, "reset scene settings for ${location.id}")
     }
 
     private fun spinEarth(degrees: Float) {
         if (!immersiveFocused) return
-        currentLocation.manualView()
+        deviceLocation.manualView()
         earthExploration.spinBy(degrees)
         updateSolarEnvironment(force = true)
     }
 
     private fun onEarthControl(control: EarthControl) {
         if (!immersiveFocused) return
-        currentLocation.manualView()
+        deviceLocation.manualView()
         grip?.cancelEarthGrab()
         spaceVisitorRenderer?.cancelGrab()
         if (control == EarthControl.HOME) {
-            scene.setViewOrigin(0f, 0f, 0f, 0f)
+            val defaultSeat = defaultSeatSetting(currentLocation)
+            scene.setViewOrigin(defaultSeat.x, defaultSeat.y, defaultSeat.z, defaultSeat.yaw)
             grip?.bringScreenToView()
         }
         earthExploration.apply(control, scene.getViewerPose())
@@ -681,7 +750,7 @@ class TheatreActivity : AppSystemActivity() {
 
     private fun restoreViewingPreset(preset: ViewingPreset) {
         if (!immersiveFocused || !preset.valid()) return
-        currentLocation.manualView()
+        deviceLocation.manualView()
         grip?.cancelEarthGrab()
         spaceVisitorRenderer?.cancelGrab()
         val origin = scene.getViewOrigin()
@@ -707,18 +776,18 @@ class TheatreActivity : AppSystemActivity() {
     private fun requestEarthLocation() {
         if (!model.useCurrentLocation.value) return
         // Explicit user input must also work after a diagnostic launch disabled automatic location.
-        currentLocation.setEnabled(true)
+        deviceLocation.setEnabled(true)
         model.locationMessage.value = "Requesting your approximate location…"
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST)
-        } else currentLocation.refresh()
+        } else deviceLocation.refresh()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != LOCATION_PERMISSION_REQUEST || !model.useCurrentLocation.value) return
-        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) currentLocation.refresh()
+        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) deviceLocation.refresh()
         else model.locationMessage.value = "Location access was denied. Enable it in headset app permissions, then choose Above me."
     }
 
@@ -734,6 +803,7 @@ class TheatreActivity : AppSystemActivity() {
         }
         if (model.weatherControlPress(x, y)) return
         if (model.earthControlPress(x, y)) return
+        if (model.scenePickerPress(x, y)) return
         if (model.sceneControlPress(x, y)) return
         if (model.librarySearchPress(x, y)) return
         val browse = model.browse.value

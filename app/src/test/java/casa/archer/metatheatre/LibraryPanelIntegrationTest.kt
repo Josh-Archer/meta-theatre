@@ -90,6 +90,8 @@ class LibraryPanelIntegrationTest {
             val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
             compose.runOnIdle {
                 assertTrue(currentModel.sceneControlPress(bounds.center.x / root.width, bounds.center.y / root.height))
+                currentModel.earthControlsOpen.value = false
+                currentModel.closeScenePicker()
             }
         }
         compose.runOnIdle {

@@ -66,6 +66,7 @@ internal class ScreenGripSystem(
     private val mediaActive: () -> Boolean = { false },
     private val hasSubtitleCues: () -> Boolean = { false },
     private val onPanelCursor: (PanelCursor?) -> Unit = {},
+    private val onPoseSaved: (Pose) -> Unit = {},
 ) : SystemBase() {
     var watching: Boolean = false
         set(value) {
@@ -131,6 +132,9 @@ internal class ScreenGripSystem(
     private var observedSize: ScreenSize? = null
     private var savedSize: ScreenSize? = null
     private var sizeChangedMs = 0L
+    private var observedPose: Pose? = null
+    private var savedPose: Pose? = null
+    private var poseChangedMs = 0L
     private var cursorVisible = false
     private val cursor = Entity.create(
         Mesh("mesh://sphere".toUri(), hittable = MeshCollision.NoCollision),
@@ -172,6 +176,15 @@ internal class ScreenGripSystem(
             val now = SystemClock.uptimeMillis()
             if (size != observedSize) { observedSize = size; sizeChangedMs = now }
             if (now - sizeChangedMs >= 750L) saveScreenSize()
+            val currentPose = screenPose()
+            val lastPose = observedPose
+            if (lastPose == null || (lastPose.t - currentPose.t).length() > 0.005f ||
+                abs(lastPose.q.x - currentPose.q.x) > 0.001f || abs(lastPose.q.y - currentPose.q.y) > 0.001f ||
+                abs(lastPose.q.z - currentPose.q.z) > 0.001f || abs(lastPose.q.w - currentPose.q.w) > 0.001f) {
+                observedPose = Pose(currentPose.t.copy(), currentPose.q.copy())
+                poseChangedMs = now
+            }
+            if (now - poseChangedMs >= 750L) saveScreenPose()
         }
     }
 
@@ -188,6 +201,32 @@ internal class ScreenGripSystem(
         savedSize = size
         onSizeSaved(size)
         Log.i(TAG, "screen size saved width=${size.width} height=${size.height}")
+    }
+
+    fun screenPose(): Pose {
+        return runCatching { screen.getComponent<Transform>().transform }.getOrNull() ?: EarthOrbit.screenPose
+    }
+
+    fun restorePose(pose: Pose) {
+        screenMotion = null
+        val copied = Pose(pose.t.copy(), pose.q.copy())
+        screen.setComponent(Transform(copied))
+        savedPose = Pose(pose.t.copy(), pose.q.copy())
+        observedPose = Pose(pose.t.copy(), pose.q.copy())
+        syncOverlays(force = true)
+        Log.i(TAG, "screen pose restored pos=${pose.t} rot=${pose.q}")
+    }
+
+    fun saveScreenPose() {
+        val pose = screenPose()
+        val current = savedPose
+        if (current != null && (current.t - pose.t).length() < 0.005f &&
+            abs(current.q.x - pose.q.x) < 0.001f && abs(current.q.y - pose.q.y) < 0.001f &&
+            abs(current.q.z - pose.q.z) < 0.001f && abs(current.q.w - pose.q.w) < 0.001f) return
+        val copied = Pose(pose.t.copy(), pose.q.copy())
+        savedPose = copied
+        onPoseSaved(copied)
+        Log.i(TAG, "screen pose saved pos=${pose.t} rot=${pose.q}")
     }
 
     fun playerInteraction() = autoHide.interact(SystemClock.uptimeMillis())

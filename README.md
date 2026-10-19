@@ -135,6 +135,15 @@ panel shows the model time and labels offline data. Only viewed coordinates are
 sent to the provider; the app does not request GPS permission or store weather
 locations on disk. See [weather authoring and validation](art/WEATHER.md).
 
+## Selectable environments
+
+Open the library and choose **Scenes** along its bottom edge to switch environments:
+
+- **Earth orbit**: Sit floating in open space in the lounge chair with the Earth panorama below and the cinema screen in front.
+- **Spaceship cabin**: Sit inside a spaceship cockpit with Earth visible through the starboard window and the cinema screen mounted on the forward bulkhead.
+
+Each environment remembers its own screen size, screen position, and seated view origin. Choosing **Reset to default** restores the initial preset for the current environment. Media playback and selected audio/subtitle tracks remain active and uninterrupted when switching scenes. See [environments validation](art/validation/ENVIRONMENTS.md) for automated checks and Quest hardware verification.
+
 ## Plex
 
 On the library panel, choose Link Plex. The headset shows a code. On your phone, open https://plex.tv/link and enter it. Pick a server if you have more than one, then a library, a show, a season, and an episode.
