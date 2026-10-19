@@ -60,13 +60,14 @@ data class PlexPlaybackStream(
     val selected: Boolean = false,
 )
 
-class PlexException(message: String) : Exception(message)
+enum class PlexFailure { ACCOUNT_AUTH, SERVER_AUTH, CONNECTION, SERVER, OTHER }
+class PlexException(message: String, val failure: PlexFailure = PlexFailure.OTHER) : Exception(message)
 
 /**
  * Plex pin login and library reads. Playback URLs carry the token, so nothing
  * in this class logs a URL or a token.
  */
-class PlexClient(context: Context) {
+class PlexClient(context: Context, private val accountEndpoint: String = PLEX) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val clientId: String = prefs.getString(KEY_CLIENT, null) ?: UUID.randomUUID().toString().also {
         check(prefs.edit().putString(KEY_CLIENT, it).commit()) { "Couldn't save the Plex device identity" }
@@ -84,7 +85,7 @@ class PlexClient(context: Context) {
 
     fun requestPin(): Pin {
         // strong=true is the long code for an auth URL. plex.tv/link wants the short pin.
-        val body = request("POST", "$PLEX/api/v2/pins", token = null)
+        val body = request("POST", "$accountEndpoint/api/v2/pins", token = null)
         val json = JSONObject(body)
         val code = json.getString("code")
         Log.i(TAG, "pin code length ${code.length}")
@@ -93,17 +94,17 @@ class PlexClient(context: Context) {
 
     fun pollPin(pin: Pin): String? {
         val code = URLEncoder.encode(pin.code, "UTF-8")
-        val body = request("GET", "$PLEX/api/v2/pins/${pin.id}?code=$code", token = null)
+        val body = request("GET", "$accountEndpoint/api/v2/pins/${pin.id}?code=$code", token = null)
         val json = JSONObject(body)
         if (json.isNull("authToken")) return null
         return json.optString("authToken").takeIf { it.isNotBlank() }
     }
 
     fun servers(): List<PlexServer> {
-        val account = token ?: throw PlexException("Not signed in to Plex")
+        val account = token ?: throw PlexException("Link your Plex account to continue.", PlexFailure.ACCOUNT_AUTH)
         val body = request(
             "GET",
-            "$PLEX/api/v2/resources?includeHttps=1&includeRelay=1",
+            "$accountEndpoint/api/v2/resources?includeHttps=1&includeRelay=1",
             account,
         )
         val devices = if (body.trimStart().startsWith("[")) {
@@ -350,7 +351,7 @@ class PlexClient(context: Context) {
                 if (code in 200..299) return uri.trimEnd('/')
                 lastError = "HTTP $code"
             } catch (error: Exception) {
-                lastError = error.message
+                lastError = "connection failed"
             }
         }
         if (lastError != null) Log.i(TAG, "No reachable connection ($lastError)")
@@ -374,12 +375,21 @@ class PlexClient(context: Context) {
         val connection = open(method, url, token, 20_000)
         return try {
             val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
-                throw PlexException("Plex returned $code ${redact(body).take(180)}".trim())
+                val accountRequest = url.startsWith(accountEndpoint.trimEnd('/') + "/")
+                throw when {
+                    code in listOf(401, 403) && accountRequest -> PlexException(
+                        "Your Plex account needs to be linked again. Your saved progress is kept.", PlexFailure.ACCOUNT_AUTH)
+                    code in listOf(401, 403) -> PlexException(
+                        "Plex server access changed. Reconnect to refresh access.", PlexFailure.SERVER_AUTH)
+                    code == 429 || code >= 500 -> PlexException(
+                        "Plex is temporarily unavailable (HTTP $code). Reconnect to try again.", PlexFailure.SERVER)
+                    else -> PlexException("Plex returned HTTP $code.")
+                }
             }
-            body
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } catch (error: java.io.IOException) {
+            throw PlexException("Couldn't connect to Plex. Your sign-in is still saved.", PlexFailure.CONNECTION)
         } finally {
             connection.disconnect()
         }

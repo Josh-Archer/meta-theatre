@@ -60,7 +60,7 @@ class PlayerBarIntegrationTest {
         }
 
         val buttonBounds = listOf("Pause", "＋  Larger", "−  Smaller", "Audio: English", "Subtitles: Off",
-            "Explore Earth", "Recently watched", "Quiet cinema: Off").map { label ->
+            "Explore Earth", "Recently watched", "Quiet cinema: Off", "Reconnect").map { label ->
             val node = compose.onNodeWithText(label).assertIsDisplayed()
             val layout = mutableListOf<TextLayoutResult>()
             node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layout) }
@@ -73,7 +73,7 @@ class PlayerBarIntegrationTest {
         }
         compose.onNodeWithText("Input: Dolby Vision").assertIsDisplayed()
         for ((upper, lower) in buttonBounds.zipWithNext()) {
-            assertTrue("Sidebar controls must not overlap", upper.bottom <= lower.top)
+            assertTrue("Sidebar controls must not overlap", upper.bottom <= lower.top || upper.right <= lower.left)
         }
         compose.runOnIdle { captureUiFixture(compose.activity, "player-controls.png") }
 

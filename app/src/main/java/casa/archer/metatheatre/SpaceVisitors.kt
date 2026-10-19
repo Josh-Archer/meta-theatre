@@ -13,6 +13,7 @@ object SpaceVisitors {
     val iss = Visitor("iss.glb", 120.0, 85.0, 3.0, 420f, 1.35f, 20.0, false)
     val roadster = Visitor("space_roadster.glb", 150.0, 95.0, 12.0, 24f, 1.5f, 16.0, true)
     val all = listOf(iss, roadster)
+    internal fun radius(visitor: Visitor) = if (visitor == iss) 70f else 2.65f
 
     fun progress(visitor: Visitor, elapsedSeconds: Double): Double? {
         if (!elapsedSeconds.isFinite() || elapsedSeconds < visitor.firstPassSeconds) return null

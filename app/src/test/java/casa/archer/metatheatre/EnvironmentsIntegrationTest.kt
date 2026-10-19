@@ -216,6 +216,7 @@ class EnvironmentsIntegrationTest {
         doAnswer { 42_000L }.`when`(player).currentPosition
         doAnswer { 120_000L }.`when`(player).duration
         doAnswer { true }.`when`(player).isPlaying
+        doAnswer { Player.STATE_READY }.`when`(player).playbackState
 
         val screenPlayer = ScreenPlayer(context) { _, selector, _ ->
             capturedSelector = selector
@@ -249,6 +250,8 @@ class EnvironmentsIntegrationTest {
             ),
         )
 
+        capturedListener?.onPlaybackStateChanged(Player.STATE_READY)
+        screenPlayer.publish()
         screenPlayer.cycleAudio()
         val audioOverrideBefore = capturedSelector?.parameters?.overrides?.values?.singleOrNull()
         assertNotNull(audioOverrideBefore)

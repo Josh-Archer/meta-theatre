@@ -602,6 +602,18 @@ internal class ScreenGripSystem(
         syncOverlays(force = true)
     }
 
+    fun restorePlacement(pose: Pose, size: ScreenSize) {
+        grab = null
+        screenMotion = null
+        handGestures.reset()
+        openGestures.reset()
+        earthSpin.cancel()
+        applySize(size)
+        screen.setComponent(Transform(Pose(pose.t.copy(), pose.q.copy())))
+        saveScreenSize()
+        syncOverlays(force = true)
+    }
+
     private fun restoreScreen() {
         bringScreenToView()
         onScreenHiddenChange(false)

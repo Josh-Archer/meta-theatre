@@ -3,6 +3,7 @@ package casa.archer.metatheatre
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
@@ -82,6 +83,8 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
     val earthView by model.earthViewLabel.collectAsState()
     val scenePickerOpen by model.scenePickerOpen.collectAsState()
     val weatherOpen by model.weatherSettingsOpen.collectAsState()
+    val earthSettings by model.earthSettingsOpen.collectAsState()
+    val presetsOpen by model.viewingPresetsOpen.collectAsState()
     val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
@@ -102,6 +105,14 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
         }
         if (earthOpen && weatherOpen) {
             WeatherMenu(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && presetsOpen) {
+            ViewingPresetsMenu(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && earthSettings) {
+            EarthSettingsMenu(model)
             return@MaterialTheme
         }
         if (earthOpen) {
@@ -310,10 +321,12 @@ private fun ShelfHeader(
     movieReady: Boolean,
     model: TheatreModel,
 ) {
+    val reconnect by model.plexReconnectAvailable.collectAsState()
+    val relink by model.plexLinkRequired.collectAsState()
     val action = when (browse) {
         Browse.SignedOut -> ""
         is Browse.Linking -> "Cancel"
-        else -> "Sign out"
+        else -> if (relink) "Relink Plex" else "Sign out"
     }
     Row(
         modifier = Modifier
@@ -323,9 +336,9 @@ private fun ShelfHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ZoneButton(
-            label = if (canGoBack) "Back" else "",
+            label = if (reconnect) "Reconnect" else if (canGoBack) "Back" else "",
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.BACK_X),
-        ) { if (canGoBack) model.back() }
+        ) { if (reconnect) model.reconnectPlex() else if (canGoBack) model.back() }
         Column(
             modifier = Modifier
                 .weight(PosterGrid.PLAYER_X - PosterGrid.BACK_X)
@@ -358,7 +371,7 @@ private fun ShelfHeader(
         ZoneButton(
             label = action,
             modifier = Modifier.fillMaxHeight().weight(1f - PosterGrid.SIGN_OUT_X),
-        ) { if (action.isNotBlank()) model.requestSignOut() }
+        ) { if (relink) model.link() else if (action.isNotBlank()) model.requestSignOut() }
     }
 }
 
@@ -485,9 +498,81 @@ private fun EarthMenu(model: TheatreModel, view: String) {
                 }
             }
         }
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
-                color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        ZoneButton("Viewing presets", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .1f).dp), highlighted = true) {
+            model.viewingPresetsOpen.value = true
+        }
+        ZoneButton("Location, zoom & rotation", Modifier.fillMaxSize(), highlighted = true) {
+            model.earthSettingsOpen.value = true
+        }
+    }
+}
+
+@Composable
+private fun EarthSettingsMenu(model: TheatreModel) {
+    val location by model.useCurrentLocation.collectAsState()
+    val rotation by model.realEarthRotation.collectAsState()
+    val zoom by model.earthZoom.collectAsState()
+    val message by model.locationMessage.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Location, zoom & rotation", color = Ink, fontSize = 36.sp)
+            Text("Earth zoom: ${String.format(java.util.Locale.US, "%.2f", zoom)}×", color = Accent, fontSize = 26.sp)
+        }
+        EarthSettingsControls.rows.forEach { row ->
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.ROW).dp)) {
+                row.forEach { control ->
+                    val label = when(control) {
+                        EarthSetting.LOCATION -> "Use my location: ${if (location) "On" else "Off"}"
+                        EarthSetting.ROTATION -> "Real-time rotation: ${if (rotation) "On" else "Off"}"
+                        else -> control.label
+                    }
+                    ZoneButton(label, Modifier.fillMaxHeight().weight(1f),
+                        acceptPointerClick = control == EarthSetting.ABOVE_ME,
+                        highlighted = control == EarthSetting.LOCATION && location || control == EarthSetting.ROTATION && rotation) {
+                        model.earthSetting(control)
+                    }
+                }
+            }
+        }
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(message, color = Ink, fontSize = 26.sp)
+            Text("Real-time: one turn in about 23h 56m. Your view slowly drifts over the surface; Above me recenters it.", color = Muted, fontSize = 24.sp)
+            Text("Location is read only while this app is open. Coordinates stay in memory unless you save a viewing preset. Live weather sends the viewed region to Open-Meteo when enabled.", color = Muted, fontSize = 24.sp)
+        }
+    }
+}
+
+@Composable
+private fun ViewingPresetsMenu(model: TheatreModel) {
+    val presets by model.viewingPresets.collectAsState()
+    val message by model.presetMessage.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * PresetControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Viewing presets", color = Ink, fontSize = 36.sp)
+            Text(message, color = Accent, fontSize = 24.sp)
+        }
+        presets.forEachIndexed { slot, preset ->
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * PresetControls.ROW).dp)) {
+                Box(Modifier.fillMaxHeight().weight(1f), contentAlignment = Alignment.Center) {
+                    Text("View ${slot + 1}\n${if (preset == null) "Empty" else "Saved"}",
+                        color = Ink, fontSize = 28.sp, textAlign = TextAlign.Center)
+                }
+                ZoneButton(if (preset == null) "" else "Restore ${slot + 1}", Modifier.fillMaxHeight().weight(1f)) {
+                    model.presetControl(PresetAction.RESTORE, slot)
+                }
+                ZoneButton("Save ${slot + 1}", Modifier.fillMaxHeight().weight(1f), highlighted = true) {
+                    model.presetControl(PresetAction.SAVE, slot)
+                }
+                ZoneButton(if (preset == null) "" else "Clear ${slot + 1}", Modifier.fillMaxHeight().weight(1f)) {
+                    model.presetControl(PresetAction.CLEAR, slot)
+                }
+            }
+        }
+        Row(Modifier.fillMaxSize()) {
+            ZoneButton("Reset view", Modifier.fillMaxHeight().weight(1f)) { model.presetControl(PresetAction.RESET) }
+            ZoneButton("Done", Modifier.fillMaxHeight().weight(1f)) { model.presetControl(PresetAction.DONE) }
         }
     }
 }
@@ -580,7 +665,7 @@ private fun WeatherMenu(model: TheatreModel) {
                 Text("Model time: $time", color = Muted, fontSize = 26.sp)
             }
             Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nRain, snow and storms are represented by their cloud shapes.", color = Muted, fontSize = 26.sp)
-            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. No headset location permission is used.", color = Muted, fontSize = 24.sp)
+            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. Headset location is optional in Earth settings.", color = Muted, fontSize = 24.sp)
         }
     }
 }
@@ -622,15 +707,19 @@ private fun Linking(code: String) {
 }
 
 @Composable
-private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false, onClick: () -> Unit) {
+private fun ZoneButton(label: String, modifier: Modifier, highlighted: Boolean = false,
+    acceptPointerClick: Boolean = false, onClick: () -> Unit) {
     Box(
         modifier = modifier
             .padding(6.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(if (label.isBlank()) Color.Transparent else Zone)
-            .semantics {
+            // Recenter is idempotent and accepts SDK pointer clicks as well as the
+            // custom hand ray. Keep toggles on their existing single input path.
+            .then(if (acceptPointerClick) Modifier.clickable(enabled = label.isNotBlank(), role = Role.Button, onClick = onClick)
+            else Modifier.semantics {
                 if (label.isNotBlank()) { role = Role.Button; onClick { onClick(); true } }
-            },
+            }),
         contentAlignment = Alignment.Center,
     ) {
         if (label.isNotBlank()) {

@@ -35,6 +35,8 @@ data class Transport(
     val sourceWidth: Int = 0,
     val sourceHeight: Int = 0,
     val videoColor: String = "",
+    val canRetry: Boolean = false,
+    val reconnecting: Boolean = false,
 )
 
 /**
@@ -64,6 +66,7 @@ class ScreenPlayer internal constructor(
     private var route = PlaybackRoute.DIRECT
     private var pending: Playable? = null
     private var pendingPositionMs = 0L
+    private var lastKnownPositionMs = 0L
     private var starting = false
     internal var onProgress: ((Long, Long, Boolean) -> Unit)? = null
     private var subtitle: String = ""
@@ -73,6 +76,12 @@ class ScreenPlayer internal constructor(
     private var quality = PlaybackQuality.ORIGINAL
     private val trackCatalog = PlaybackTrackCatalog()
     private var pendingPlayWhenReady = true
+    private val recoveryHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var recoveryTask: Runnable? = null
+    private var recoveryPosition: Long? = null
+    private var reconnectAttempts = 0
+    private var healthySinceMs = 0L
+    internal var onReconnect: (() -> Unit)? = null
     @Volatile private var lastColorLabel = ""
     @Volatile private var playbackGeneration = 0
 
@@ -125,7 +134,11 @@ class ScreenPlayer internal constructor(
     }
 
     fun play(item: Playable, positionMs: Long = 0L) {
+        cancelRecovery()
+        recoveryPosition = null
+        reconnectAttempts = 0
         pendingPositionMs = positionMs.coerceAtLeast(0L)
+        lastKnownPositionMs = pendingPositionMs
         active = item
         subtitle = item.subtitle
         route = quality.startingRoute
@@ -151,6 +164,7 @@ class ScreenPlayer internal constructor(
         // Re-selecting Original also retries it after a compatibility fallback.
         if (value == quality && route == value.startingRoute) return
         quality = value
+        cancelRecovery()
         route = value.startingRoute
         active?.let { updateTrackChoices(it, preserveSelection = true) }
         updateTrackQuality()
@@ -161,7 +175,7 @@ class ScreenPlayer internal constructor(
             transport.value = transport.value.copy(quality = value)
             return
         }
-        val position = current.currentPosition.coerceAtLeast(0L)
+        val position = restartPosition(current)
         val resume = current.playWhenReady
         start(current, item, streamUrlForCurrentChoices(item), position, resume)
     }
@@ -188,7 +202,10 @@ class ScreenPlayer internal constructor(
         val current = player ?: return
         val duration = current.duration
         if (duration <= 0L) return
-        current.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
+        val target = (duration * fraction.coerceIn(0f, 1f)).toLong()
+        lastKnownPositionMs = target
+        if (recoveryPosition != null) recoveryPosition = target
+        current.seekTo(target)
         publish()
     }
 
@@ -265,7 +282,7 @@ class ScreenPlayer internal constructor(
     private fun selectPlexStream(type: PlaybackTrackType, choice: PlaybackTrack) {
         val item = active ?: return
         val current = player ?: return
-        val position = current.currentPosition.coerceAtLeast(0L)
+        val position = restartPosition(current)
         val resume = current.playWhenReady
         val selected = tracks.value
         val audioId = (if (type == PlaybackTrackType.AUDIO) choice.plexStreamId else selected.selectedAudioId)
@@ -314,8 +331,11 @@ class ScreenPlayer internal constructor(
     fun seekBy(deltaMs: Long) {
         val current = player ?: return
         val duration = current.duration
-        val target = (current.currentPosition + deltaMs).coerceAtLeast(0L)
-        current.seekTo(if (duration > 0) target.coerceAtMost(duration) else target)
+        val target = (restartPosition(current) + deltaMs).coerceAtLeast(0L)
+        val clamped = if (duration > 0) target.coerceAtMost(duration) else target
+        lastKnownPositionMs = clamped
+        if (recoveryPosition != null) recoveryPosition = clamped
+        current.seekTo(clamped)
         publish()
     }
 
@@ -353,14 +373,21 @@ class ScreenPlayer internal constructor(
     fun publish() {
         val current = player
         val shown = transport.value
+        if (!starting && current != null && active != null && recoveryPosition == null &&
+            (current.playbackState == Player.STATE_READY || current.playbackState == Player.STATE_ENDED)) {
+            lastKnownPositionMs = current.currentPosition.coerceAtLeast(0L)
+        }
         transport.value = shown.copy(
             title = active?.title ?: shown.title,
             subtitle = subtitle.ifBlank { shown.subtitle },
             playing = current?.isPlaying == true,
             playWhenReady = current?.playWhenReady ?: pendingPlayWhenReady,
-            positionMs = if (starting) shown.positionMs else current?.currentPosition ?: shown.positionMs,
+            positionMs = recoveryPosition ?: if (starting) shown.positionMs else lastKnownPositionMs,
             durationMs = if (starting) shown.durationMs else current?.duration?.takeIf { it > 0L } ?: shown.durationMs,
         )
+        if (current?.isPlaying == true && healthySinceMs > 0 && android.os.SystemClock.elapsedRealtime() - healthySinceMs > 30_000) {
+            reconnectAttempts = 0
+        }
         if (!starting && active != null && current != null &&
             (current.playbackState == Player.STATE_READY || current.playbackState == Player.STATE_ENDED)) {
             onProgress?.invoke(transport.value.positionMs, transport.value.durationMs, current.playbackState == Player.STATE_ENDED)
@@ -368,12 +395,16 @@ class ScreenPlayer internal constructor(
     }
 
     fun close() {
+        cancelRecovery()
+        recoveryPosition = null
+        reconnectAttempts = 0
         playbackGeneration++
         lastColorLabel = ""
         player?.pause()
         active = null
         pending = null
         pendingPositionMs = 0
+        lastKnownPositionMs = 0
         pendingPlayWhenReady = false
         subtitle = ""
         resumeAfterSuspension = false
@@ -387,6 +418,8 @@ class ScreenPlayer internal constructor(
     }
 
     fun release() {
+        cancelRecovery()
+        onReconnect = null
         playbackGeneration++
         lastColorLabel = ""
         player?.release()
@@ -403,7 +436,9 @@ class ScreenPlayer internal constructor(
         positionMs: Long = 0L,
         playWhenReady: Boolean = true,
     ) {
+        cancelRecovery()
         playbackGeneration++
+        lastKnownPositionMs = positionMs
         lastColorLabel = ""
         subtitleCues.value = emptyList()
         trackSelector?.let { selector ->
@@ -433,6 +468,39 @@ class ScreenPlayer internal constructor(
         } finally { starting = false }
     }
 
+    private fun cancelRecovery() {
+        recoveryTask?.let(recoveryHandler::removeCallbacks)
+        recoveryTask = null
+    }
+
+    private fun restartPosition(current: ExoPlayer): Long = recoveryPosition ?:
+        if (current.playbackState == Player.STATE_READY || current.playbackState == Player.STATE_ENDED)
+            current.currentPosition.coerceAtLeast(0L) else lastKnownPositionMs
+
+    /** Refresh authenticated server URLs through the model; plain local fixtures just retry their stream. */
+    fun retry() {
+        if (active == null) return
+        cancelRecovery()
+        recoveryPosition = recoveryPosition ?: transport.value.positionMs.coerceAtLeast(0L)
+        reconnectAttempts = 0
+        transport.value = transport.value.copy(detail = "Reconnecting to Plex…", reconnecting = true, canRetry = false)
+        val refresh = onReconnect
+        if (refresh != null) refresh() else reconnect(active!!)
+    }
+
+    internal fun reconnect(item: Playable) {
+        val position = recoveryPosition ?: transport.value.positionMs
+        val resume = pendingPlayWhenReady && !menuOpen && !screenHidden
+        active = item
+        updateTrackChoices(item, preserveSelection = true)
+        player?.let { start(it, item, streamUrlForCurrentChoices(item), position, resume) }
+            ?: run { pending = item; pendingPositionMs = position }
+    }
+
+    internal fun reconnectFailed(message: String) {
+        transport.value = transport.value.copy(detail = message, reconnecting = false, canRetry = true)
+    }
+
     private val listener = object : Player.Listener {
         override fun onTracksChanged(tracks: Tracks) {
             trackCatalog.update(tracks)
@@ -446,7 +514,9 @@ class ScreenPlayer internal constructor(
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
-                transport.value = transport.value.copy(detail = "")
+                recoveryPosition = null
+                healthySinceMs = android.os.SystemClock.elapsedRealtime()
+                transport.value = transport.value.copy(detail = "", reconnecting = false, canRetry = false)
             }
             publish()
         }
@@ -473,10 +543,30 @@ class ScreenPlayer internal constructor(
             Log.i(TAG, "playback error ${error.errorCodeName}")
             val item = active
             val current = player
+            cancelRecovery()
+            recoveryPosition = recoveryPosition ?: transport.value.positionMs.coerceAtLeast(0L)
+            healthySinceMs = 0
+            val failure = playbackFailure(error)
+            if (item != null && current != null && (failure == PlaybackFailure.CONNECTION || failure == PlaybackFailure.SERVER)) {
+                if (reconnectAttempts < 3) {
+                    val attempt = ++reconnectAttempts
+                    transport.value = transport.value.copy(detail = "Connection interrupted · retry $attempt of 3",
+                        reconnecting = true, canRetry = true)
+                    val generation = playbackGeneration
+                    val task = Runnable {
+                        recoveryTask = null
+                        if (generation == playbackGeneration && active === item) reconnect(item)
+                    }
+                    recoveryTask = task
+                    recoveryHandler.postDelayed(task, 1_000L shl (attempt - 1))
+                } else reconnectFailed("Plex is unreachable. Check the connection, then choose Reconnect.")
+                publish()
+                return
+            }
             val next = route.next()
-            if (item != null && current != null && next != null) {
-                val position = current.currentPosition.coerceAtLeast(0L)
-                val resume = current.playWhenReady
+            if (failure == PlaybackFailure.COMPATIBILITY && item != null && current != null && next != null) {
+                val position = recoveryPosition!!
+                val resume = pendingPlayWhenReady && !menuOpen && !screenHidden
                 route = next
                 updateTrackChoices(item, preserveSelection = true)
                 val url = streamUrlForCurrentChoices(item)
@@ -484,7 +574,11 @@ class ScreenPlayer internal constructor(
                 start(current, item, url, position, resume)
                 return
             }
-            transport.value = transport.value.copy(detail = "Playback failed (${error.errorCodeName})")
+            reconnectFailed(when (failure) {
+                PlaybackFailure.AUTHORIZATION -> "Plex denied this stream. Reconnect to refresh server access."
+                PlaybackFailure.MISSING -> "This file is unavailable on the Plex server."
+                else -> "Playback failed (${error.errorCodeName}). Choose Reconnect to retry."
+            })
             publish()
         }
     }

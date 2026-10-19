@@ -24,13 +24,16 @@ void main() {
     float elevation = dot(normal, sun);
     float daylight = dayWeight(elevation);
     vec3 bumpNormal = terrainNormal(normal);
-    float cloudDensity = texture(cloudMap, earth.uv + cloudSunOffset(sun, earthTangentFrame(normal), elevation)).a;
-    float cloudTransmission = exp(-cloudDensity * 1.15);
+    vec4 cloud = texture(cloudMap, earth.uv);
+    vec2 shadowOffset = cloudSunOffset(sun, earthTangentFrame(normal), elevation) * (0.4 + cloudProfile(cloud).x);
+    float cloudDensity = texture(cloudMap, earth.uv + shadowOffset).a;
+    float softDensity = texture(cloudMap, earth.uv + shadowOffset * 0.7).a;
+    float cloudTransmission = exp(-(cloudDensity + softDensity) * 0.7);
     float diffuse = 0.065 + 0.935 * max(dot(bumpNormal, sun), 0.0) * cloudTransmission;
     vec3 day = texture(dayMap, earth.uv).rgb;
     vec3 city = texture(nightMap, earth.uv).rgb;
     float darkness = 1.0 - smoothstep(-0.12, 0.02, elevation);
-    vec3 color = day * (0.002 + daylight * diffuse) + city * 2.8 * darkness;
+    vec3 color = day * (0.004 + daylight * diffuse) + city * 3.2 * darkness * exp(-cloud.a * 1.3);
     vec3 view = localView();
     vec3 halfVector = sun + view;
     // At midnight the two vectors can be opposite; prevent a zero normalization.
@@ -40,6 +43,7 @@ void main() {
         color += vec3(2.4) * fresnel * linear_to_srgb(texture(oceanMap, earth.uv).r) * highlight * daylight * cloudTransmission;
     }
     float rim = pow(1.0 - clamp(dot(normal, view), 0.0, 1.0), 2.0);
+    color = mix(color, vec3(0.12, 0.25, 0.48), rim * daylight * 0.065);
     color += vec3(0.075, 0.018, 0.004) * exp(-abs(elevation) * 22.0) * rim;
     // The SDK's render target expects linear output (same convention as stock PBR).
     outColor = vec4(color, 1.0);

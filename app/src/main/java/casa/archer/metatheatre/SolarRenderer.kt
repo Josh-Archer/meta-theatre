@@ -42,11 +42,25 @@ class SolarRenderer(private val activity: TheatreActivity) {
     private var worldFrame = Pose()
     private val fixedBodies = mutableListOf<Pair<SolarSystem.Body, Entity>>()
     private var starsEntity: Entity? = null
+    private var earthViewCenter = EarthRenderer.CENTER
+    private var earthViewer = EarthRenderer.SEAT_EYE
+    private fun displayBody(body: SolarSystem.Body) = EarthClearance.body(body, earthViewCenter, earthViewer)
+    fun setEarthView(earth: Vector3, viewer: Vector3) {
+        earthViewCenter = worldFrame.inverse() * earth
+        earthViewer = worldFrame.inverse() * viewer
+        fixedBodies.forEach { (body, entity) ->
+            val placed = displayBody(body)
+            entity.setComponent(Transform(worldFrame * Pose(placed.center, placed.rotation)))
+        }
+    }
 
     fun setWorldFrame(frame: Pose) {
         if (worldFrame == frame) return
         worldFrame = Pose(frame.t.copy(), frame.q.copy())
-        fixedBodies.forEach { (body, entity) -> entity.setComponent(Transform(worldFrame * Pose(body.center, body.rotation))) }
+        fixedBodies.forEach { (body, entity) ->
+            val placed = displayBody(body)
+            entity.setComponent(Transform(worldFrame * Pose(placed.center, placed.rotation)))
+        }
         starsEntity?.setComponent(Transform(Pose(Vector3(0f, 0f, 0f), worldFrame.q)))
         update()
     }
@@ -78,7 +92,8 @@ class SolarRenderer(private val activity: TheatreActivity) {
                 setAttribute("parameters", Vector4(0f, if (body.name == "saturn") 1f else 0f, SolarSystem.RING_INNER, SolarSystem.RING_OUTER))
             }
             litMaterials.add(body to material)
-            val globe = entity(body.name, files.getValue("solar_body"), material, body.radius, worldFrame * Pose(body.center, body.rotation))
+            val placed = if (body.name == "moon") body else displayBody(body)
+            val globe = entity(body.name, files.getValue("solar_body"), material, body.radius, worldFrame * Pose(placed.center, placed.rotation))
             if (body.name == "moon") moonEntity = globe else fixedBodies.add(body to globe)
         }
         val saturn = SolarSystem.planets.first { it.name == "saturn" }
@@ -90,7 +105,7 @@ class SolarRenderer(private val activity: TheatreActivity) {
         }
         litMaterials.add(saturn to rings)
         fixedBodies.add(saturn to entity("rings", files.getValue("solar_rings"), rings, saturn.radius,
-            worldFrame * Pose(saturn.center, saturn.rotation)))
+            displayBody(saturn).let { worldFrame * Pose(it.center, it.rotation) }))
         val sun = material("solar_surface", listOf("colorMap", "ringMap")).apply {
             setTexture("colorMap", texture("sun.jpg"))
             setTexture("ringMap", ringTexture)
@@ -144,8 +159,8 @@ class SolarRenderer(private val activity: TheatreActivity) {
         )
     }
 
-    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val canonicalSun = SolarSystem.sunPosition(instant, zone)
+    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault(), worldSun: Vector3? = null) {
+        val canonicalSun = worldSun?.let { worldFrame.inverse() * it } ?: SolarSystem.sunPosition(instant, zone)
         val position = worldFrame * canonicalSun
         val moon = SolarSystem.moonAt(instant, canonicalSun)
         moonEntity?.setComponent(Transform(worldFrame * Pose(moon.center, moon.rotation)))

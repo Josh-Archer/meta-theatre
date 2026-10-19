@@ -43,6 +43,7 @@ class TheatreModel(
     private var servers = emptyList<PlexServer>()
     private var activeMovie: MovieKey? = null
     private var lastCheckpointMs = 0L
+    private var reconnectJob: Job? = null
     private var browseJob: Job? = null
     private var workGeneration = 0
     private val stack = ArrayDeque<Browse>()
@@ -52,6 +53,8 @@ class TheatreModel(
     val browse = MutableStateFlow<Browse>(Browse.SignedOut)
     val loading = MutableStateFlow(false)
     val error = MutableStateFlow<String?>(null)
+    val plexReconnectAvailable = MutableStateFlow(false)
+    val plexLinkRequired = MutableStateFlow(false)
     val canGoBack = MutableStateFlow(false)
     val libraryOpen = MutableStateFlow(true)
     val screenHidden = MutableStateFlow(false)
@@ -80,6 +83,21 @@ class TheatreModel(
     var onResetSceneSettings: ((TheatreLocation) -> Unit)? = null
     internal val weatherUi = MutableStateFlow(WeatherUi(enabled = state.liveWeatherEnabled))
     val weatherSettingsOpen = MutableStateFlow(false)
+    val earthSettingsOpen = MutableStateFlow(false)
+    val useCurrentLocation = MutableStateFlow(state.useCurrentLocation)
+    val realEarthRotation = MutableStateFlow(state.realEarthRotationEnabled)
+    val earthZoom = MutableStateFlow(1f)
+    val locationMessage = MutableStateFlow(if (state.useCurrentLocation) "Waiting for headset location." else "Current location is off.")
+    internal var onLocationEnabled: ((Boolean) -> Unit)? = null
+    internal var onLocationRequest: (() -> Unit)? = null
+    internal var onRealRotation: ((Boolean) -> Unit)? = null
+    internal var onEarthZoom: ((EarthSetting) -> Unit)? = null
+    internal val viewingPresets = MutableStateFlow(state.viewingPresets())
+    val viewingPresetsOpen = MutableStateFlow(false)
+    val presetMessage = MutableStateFlow("Save a setup, then restore it around your current seat.")
+    internal var onCapturePreset: (() -> ViewingPreset?)? = null
+    internal var onRestorePreset: ((ViewingPreset) -> Unit)? = null
+    internal var onResetView: (() -> Unit)? = null
     internal var onWeatherEnabled: ((Boolean) -> Unit)? = null
     internal var onWeatherRefresh: (() -> Unit)? = null
     var onScreenResize: ((Float) -> Unit)? = null
@@ -92,13 +110,16 @@ class TheatreModel(
 
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main + CoroutineExceptionHandler { _, error ->
-            Log.e(TAG, "browse failed", error)
+            Log.e(TAG, "browse failed (${error.javaClass.simpleName})")
             loading.value = false
-            this.error.value = error.message?.let(::redact) ?: "Something went wrong"
+            this.error.value = (error as? PlexException)?.message ?: "Couldn't connect. Try again."
         },
     )
 
-    init { player.onProgress = { position, duration, ended -> checkpoint(position, duration, ended) } }
+    init {
+        player.onProgress = { position, duration, ended -> checkpoint(position, duration, ended) }
+        player.onReconnect = ::refreshPlaybackConnection
+    }
 
     fun start() {
         if (stack.isNotEmpty()) return
@@ -114,6 +135,7 @@ class TheatreModel(
         saveCheckpoint()
         cancelBrowseWork()
         player.onProgress = null
+        player.onReconnect = null
         scope.cancel()
         panelCursor.value = null
         onPrepareScreen = null
@@ -129,6 +151,13 @@ class TheatreModel(
         onQuietCinemaPreference = null
         onPlayerInteraction = null
         onScreenHidden = null
+        onCapturePreset = null
+        onRestorePreset = null
+        onResetView = null
+        onLocationEnabled = null
+        onLocationRequest = null
+        onRealRotation = null
+        onEarthZoom = null
     }
 
     fun link() {
@@ -332,6 +361,8 @@ class TheatreModel(
         if (control == EarthControl.DONE) {
             earthControlsOpen.value = false
             weatherSettingsOpen.value = false
+            earthSettingsOpen.value = false
+            viewingPresetsOpen.value = false
             if (earthReturnToPlayer) showPlayer()
             earthReturnToPlayer = false
         } else onEarthControl?.invoke(control)
@@ -360,6 +391,7 @@ class TheatreModel(
 
     fun weatherControlPress(x: Float, y: Float): Boolean {
         if (!earthControlsOpen.value) return false
+        if (viewingPresetsOpen.value || earthSettingsOpen.value) return false
         if (weatherSettingsOpen.value) {
             WeatherControls.at(x, y)?.let(::weatherControl)
             return true
@@ -373,13 +405,74 @@ class TheatreModel(
 
     fun earthControlPress(x: Float, y: Float): Boolean {
         if (!earthControlsOpen.value) return false
+        if (earthSettingsOpen.value) {
+            EarthSettingsControls.at(x,y)?.let(::earthSetting)
+            return true
+        }
+        if (viewingPresetsOpen.value) {
+            PresetControls.at(x, y)?.let { presetControl(it.action, it.slot) }
+            return true
+        }
+        if (PresetControls.opener(x, y)) { viewingPresetsOpen.value = true; return true }
+        if (EarthSettingsControls.opener(x,y)) { earthSettingsOpen.value = true; return true }
         EarthControls.at(x, y)?.let(::earthControl)
         return true
     }
 
+    internal fun earthSetting(setting: EarthSetting) {
+        when (setting) {
+            EarthSetting.LOCATION -> {
+                val enabled = !useCurrentLocation.value
+                useCurrentLocation.value = enabled
+                state.saveUseCurrentLocation(enabled)
+                onLocationEnabled?.invoke(enabled)
+            }
+            EarthSetting.ABOVE_ME -> {
+                if (!useCurrentLocation.value) {
+                    useCurrentLocation.value = true
+                    state.saveUseCurrentLocation(true)
+                    onLocationEnabled?.invoke(true)
+                } else onLocationRequest?.invoke()
+            }
+            EarthSetting.ROTATION -> {
+                val enabled = !realEarthRotation.value
+                realEarthRotation.value = enabled
+                state.saveRealEarthRotation(enabled)
+                onRealRotation?.invoke(enabled)
+            }
+            EarthSetting.DONE -> earthSettingsOpen.value = false
+            else -> onEarthZoom?.invoke(setting)
+        }
+    }
+
+    internal fun presetControl(action: PresetAction, slot: Int = 0) {
+        if (slot !in 0 until ViewingPreset.SLOTS) return
+        when (action) {
+            PresetAction.SAVE -> {
+                val preset = onCapturePreset?.invoke()
+                if (preset == null) { presetMessage.value = "The scene is not ready to save yet."; return }
+                state.saveViewingPreset(slot, preset)
+                viewingPresets.value = state.viewingPresets()
+                presetMessage.value = "Saved view ${slot + 1}."
+            }
+            PresetAction.RESTORE -> {
+                val preset = viewingPresets.value[slot] ?: return
+                onRestorePreset?.invoke(preset)
+                presetMessage.value = "Restored view ${slot + 1}."
+            }
+            PresetAction.CLEAR -> {
+                state.saveViewingPreset(slot, null)
+                viewingPresets.value = state.viewingPresets()
+                presetMessage.value = "Cleared view ${slot + 1}."
+            }
+            PresetAction.RESET -> { onResetView?.invoke(); presetMessage.value = "Reset to the home view." }
+            PresetAction.DONE -> viewingPresetsOpen.value = false
+        }
+    }
+
     fun earthOrbitScroll(direction: Int): Boolean {
         if (!earthControlsOpen.value) return false
-        if (weatherSettingsOpen.value) return true
+        if (weatherSettingsOpen.value || viewingPresetsOpen.value || earthSettingsOpen.value) return true
         if (direction != 0) earthControl(if (direction < 0) EarthControl.ORBIT_LEFT else EarthControl.ORBIT_RIGHT)
         return true
     }
@@ -418,6 +511,7 @@ class TheatreModel(
     }
 
     fun closeToHome() {
+        reconnectJob?.cancel()
         saveCheckpoint()
         activeMovie = null
         history.leavePlayer()
@@ -485,6 +579,37 @@ class TheatreModel(
     fun togglePlayback() = player.toggle()
     fun pausePlayback() = player.pause()
 
+    fun reconnectPlex() {
+        if (activeMovie != null) player.retry() else loadServers(restoreActive = false)
+    }
+
+    private fun refreshPlaybackConnection() {
+        val key = activeMovie ?: return
+        saveCheckpoint()
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            try {
+                val refreshed = withContext(ioDispatcher) { plex.servers() }
+                if (activeMovie != key) return@launch
+                val server = refreshed.firstOrNull { it.id == key.serverId }
+                    ?: throw PlexException("This Plex server is unavailable. Your progress is saved.", PlexFailure.CONNECTION)
+                val record = history.find(key) ?: return@launch
+                val playable = withContext(ioDispatcher) {
+                    plex.playable(server, PlexItem(key.ratingKey, record.title, record.subtitle, record.type))
+                }
+                if (activeMovie != key) return@launch
+                servers = refreshed
+                plexLinkRequired.value = false
+                player.reconnect(playable)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (problem: Exception) {
+                if (activeMovie != key) return@launch
+                plexLinkRequired.value = (problem as? PlexException)?.failure == PlexFailure.ACCOUNT_AUTH
+                player.reconnectFailed((problem as? PlexException)?.message ?: "Couldn't reconnect. Your progress is saved.")
+            }
+        }
+    }
+
     fun seekBy(deltaMs: Long) = player.seekBy(deltaMs)
 
     fun seekToFraction(fraction: Float) {
@@ -519,6 +644,7 @@ class TheatreModel(
             PlayerControl.SUBTITLES -> player.cycleSubtitles()
             PlayerControl.QUIET -> toggleQuietCinema()
             PlayerControl.EARTH -> openEarthControls()
+            PlayerControl.RECONNECT -> reconnectPlex()
         }
     }
 
@@ -541,6 +667,7 @@ class TheatreModel(
     }
 
     private fun play(server: PlexServer, item: PlexItem) {
+        reconnectJob?.cancel()
         launch("Couldn't play ${item.title}") { generation ->
             val playable = withContext(ioDispatcher) { plex.playable(server, item) }
             if (!isCurrentWork(generation)) return@launch
@@ -597,6 +724,8 @@ class TheatreModel(
         browseJob?.cancel()
         val generation = ++workGeneration
         error.value = null
+        plexReconnectAvailable.value = false
+        plexLinkRequired.value = false
         loading.value = true
         browseJob = scope.launch {
             try {
@@ -604,8 +733,12 @@ class TheatreModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Log.e(TAG, fallback, error)
-                if (generation == workGeneration) this@TheatreModel.error.value = redact(error.message ?: fallback)
+                Log.e(TAG, "$fallback (${error.javaClass.simpleName})")
+                if (generation == workGeneration) {
+                    this@TheatreModel.error.value = (error as? PlexException)?.message ?: fallback
+                    plexReconnectAvailable.value = true
+                    plexLinkRequired.value = (error as? PlexException)?.failure == PlexFailure.ACCOUNT_AUTH
+                }
             } finally {
                 if (generation == workGeneration) loading.value = false
             }

@@ -67,10 +67,51 @@ Point at exposed Earth outside the screen, hold an index/thumb pinch or controll
 trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
 **Spin left** and **Spin right** buttons turn it 15 degrees per press. Surface,
 clouds, and atmosphere rotate together, with the existing shared Sun illuminating
-the geography. The visible hemisphere keeps the headset's local day/night cycle,
-including pole and far-side views. Distant planets keep their clear exhibit slots
+the geography. In real-time mode, UTC and seasonal solar declination determine
+day/night over the actual geography, including pole and far-side views. Distant planets keep their clear exhibit slots
 as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
+
+Choose **Explore Earth → Viewing presets** to save up to three setups. Each slot
+remembers screen position and size, virtual chair direction, Earth latitude and
+longitude, globe rotation, and Earth zoom. **Restore** places the saved arrangement around
+your current seated position, without restoring an old physical location. The
+presets stay on the headset across app restarts. **Reset view** returns to the
+home Earth view and default screen size. Restores use a snap change rather than
+continuous camera travel.
+
+Open **Explore Earth → Location, zoom & rotation** for the new controls:
+
+- **Use my location** is off initially. Enable it and accept the headset's
+  approximate-location permission prompt. It uses Quest's Wi-Fi location service
+  to place your orbital view over that latitude/longitude, accounting for manual
+  and real-time globe rotation. **Above me** obtains another fix and recenters.
+  The choice is remembered for the next launch; location is read once per session
+  or explicit request, while the app is in the foreground. Turning it off or
+  navigating manually cancels pending fixes so a late callback cannot move you.
+- **Closer to Earth**, **Farther from Earth**, and **Reset zoom** change Earth's
+  distance while preserving the screen, chair/view origin, and world scale.
+  The range is 0.75× to approximately 1.28× at the home seat, with room for the
+  nearby Roadster's entire flyby. Planet exhibits and the distant ISS remain
+  clear of the expanded silhouette. Viewing presets remember zoom too.
+- **Real-time rotation** starts on. Earth turns eastward once in approximately
+  23h 56m 4s, using elapsed civil time rather than frame counts. It catches up
+  after headset sleep. Your view slowly drifts over the surface; **Above me**
+  recenters on your location. Turning it off freezes globe rotation and restores
+  the earlier artistic local-clock lighting cycle.
+
+The app requests only foreground approximate location access, with no GPS,
+background subscription, IP lookup, or coordinate logging. Coordinates remain in
+memory unless you explicitly save a viewing preset; presets stay on the headset.
+When live weather is also enabled, its existing viewed-region request can include
+your current region. Location failures show permission, Wi-Fi/settings, stale-fix,
+or timeout guidance instead of moving to a guessed location.
+
+See [Meta's location API](https://developers.meta.com/vr/documentation/native/android/move-location/),
+[NASA's sidereal/solar day explanation](https://science.nasa.gov/learn/basics-of-space-flight/chapter2-1/),
+and [NOAA's solar equations](https://gml.noaa.gov/grad/solcalc/solareqns.PDF).
+Implementation and headset evidence are in the
+[location/zoom/rotation checks](art/validation/EARTH_LOCATION_ZOOM_ROTATION.md).
 
 Open **Explore Earth → Weather settings → Live weather: On** to apply current
 weather to the hemisphere you are viewing. Earth uses 8K surface/city-light maps
@@ -80,6 +121,13 @@ continuous rather than made from repeating cloud tiles. See the
 on the headset. Orbiting or spinning Earth selects a new region after the view
 settles; weather refreshes every 15 minutes while the app has focus. **Refresh**
 requests an update; **Off** restores the original cloud map.
+
+Clouds carry modeled height and storm/low-cloud profiles. Wind direction
+influences frontal detail; cloud shading includes a second self-shadow sample,
+soft ground shadows, and forward scattering. Atmospheric haze follows a thin
+shell's optical path near the horizon. City lights fade through cloud cover,
+and the night-side terrain retains a small ambient contribution. The 8K land
+and city textures, 4K cloud textures, and all three runtime meshes are preserved.
 
 Cloud coverage and weather codes come from Open-Meteo. The cloud shapes are
 modeled representations of those conditions, not satellite imagery. The weather
@@ -114,12 +162,22 @@ The headset plays the file directly. If the container or codec is rejected, it a
 
 The movie panel supports UHD 4K (3840 × 2160). When Plex has multiple copies of a
 movie, the app prefers the highest-resolution copy up to UHD, then the higher
-bitrate. Original-file playback keeps the source video quality. If it fails, the
+bitrate. Original-file playback keeps the source video quality. If its container
+or codec is incompatible, the
 app requests a Plex HLS stream up to 4K at 80 Mbps; if that also fails, it tries
 a 1080p compatibility transcode at 20 Mbps. The player bar shows the actual decoded
 resolution and labels the 1080p fallback. Lower-resolution sources remain lower
 resolution. See [UHD playback validation](art/validation/UHD_PLAYBACK.md) for checks
 and the remaining headset validation.
+
+Connection failures retry the current stream up to three times, with increasing
+delays, without changing quality. The player retains its last known position and
+whether you paused it, including pauses made while reconnecting. **Reconnect**
+on the side menu refreshes server connections and access before reopening the
+same movie at that bookmark. Opening another movie or closing playback cancels
+pending retries. Library connection failures offer **Reconnect**; a rejected
+account login offers **Relink Plex**. Neither failure clears the stored sign-in
+or watch history automatically.
 
 Movies use an opaque compositor layer with a direct decoder surface. The side
 menu's **Input** line reports the selected video's color metadata: Dolby Vision,
@@ -128,6 +186,10 @@ HDR metadata; a Plex transcode can change the color format even at 4K. Decoding
 uses the headset's native codecs, with decoder fallback enabled. See
 [viewpoint and video validation](art/validation/VIEWPOINT_VIDEO_REPAIR.md) for the
 local Dolby Vision/HDR10 decoder checks and their limits.
+
+The separate **Display: SDR · Rec.709** line identifies the app's configured
+compositor color space. An Input label of Dolby Vision describes the source;
+it does not establish Dolby Vision display output.
 
 The player rail has **Audio** and **Subtitles** buttons that cycle available
 tracks; subtitles include an **Off** choice. Original playback uses supported

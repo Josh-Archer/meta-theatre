@@ -14,6 +14,10 @@ internal class TheatreState(context: Context) {
     val liveWeatherEnabled: Boolean
         get() = prefs.getBoolean("live_weather_enabled", false)
     fun saveLiveWeatherEnabled(enabled: Boolean) { prefs.edit { putBoolean("live_weather_enabled", enabled) } }
+    val useCurrentLocation: Boolean get() = prefs.getBoolean("use_current_location", false)
+    val realEarthRotationEnabled: Boolean get() = prefs.getBoolean("real_earth_rotation", true)
+    fun saveUseCurrentLocation(enabled: Boolean) { prefs.edit { putBoolean("use_current_location", enabled) } }
+    fun saveRealEarthRotation(enabled: Boolean) { prefs.edit { putBoolean("real_earth_rotation", enabled) } }
     val quietCinemaEnabled: Boolean
         get() = prefs.getBoolean("quiet_cinema_enabled", false)
     val history: WatchHistory = runCatching {
@@ -105,6 +109,15 @@ internal class TheatreState(context: Context) {
     }
 
     fun saveSeat(location: TheatreLocation, seat: SeatSetting) = saveSeat(seat, location)
+    fun viewingPresets(): List<ViewingPreset?> = (0 until ViewingPreset.SLOTS).map { slot ->
+        runCatching { prefs.getString("viewing_preset_$slot", null)?.let { ViewingPreset.parse(JSONObject(it)) } }.getOrNull()
+    }
+    fun saveViewingPreset(slot: Int, preset: ViewingPreset?) {
+        require(slot in 0 until ViewingPreset.SLOTS && (preset == null || preset.valid()))
+        prefs.edit {
+            if (preset == null) remove("viewing_preset_$slot") else putString("viewing_preset_$slot", preset.json().toString())
+        }
+    }
     fun saveQuietCinemaEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("quiet_cinema_enabled", enabled).apply()
     }

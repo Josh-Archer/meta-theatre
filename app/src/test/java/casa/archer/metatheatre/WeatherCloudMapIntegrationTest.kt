@@ -16,7 +16,31 @@ import java.time.Instant
 @Config(sdk=[34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class WeatherCloudMapIntegrationTest {
-    @Test fun packagedEarthMapsUseTheOriginal8KDetailAnd4KCloudField() {
+    @Test fun liveCloudProfilesSeparateLowCloudFromStormHeightAndWeatherWindChangesFrontalDetail() = runTest {
+        val map = WeatherCloudMap.load(RuntimeEnvironment.getApplication().assets)
+        val center = WeatherPlace(0.0,-100.0)
+        fun snapshot(code: Int, wind: Double) = WeatherSnapshot(center, WeatherPlace.grid(center).map {
+            WeatherReading(it, Instant.parse("2026-10-18T12:00:00Z"), code, 75, 12.0, wind)
+        })
+        val storm = map.build(snapshot(95, 0.0))
+        val fog = map.build(snapshot(45, 0.0))
+        val x = (80.0/360*storm.width).toInt(); val y = storm.height/2
+        assertFalse(storm.isPremultiplied)
+        assertTrue(Color.red(storm.getPixel(x,y)) > Color.red(fog.getPixel(x,y)) + 150)
+        assertTrue(Color.green(storm.getPixel(x,y)) > 240)
+        assertTrue(Color.blue(fog.getPixel(x,y)) > 240)
+        storm.recycle(); fog.recycle()
+        val north = map.build(snapshot(61, 0.0))
+        val east = map.build(snapshot(61, 90.0))
+        var different = 0
+        for (dy in -80..80) for (dx in -80..80) {
+            if (Color.alpha(north.getPixel(x+dx,y+dy)) != Color.alpha(east.getPixel(x+dx,y+dy))) different++
+        }
+        assertTrue("Live wind must influence frontal cloud structure", different > 1000)
+        north.recycle(); east.recycle()
+    }
+
+    @Test fun packagedEarthMapsUseTheOriginal8KDetailIncludingClouds() {
         val assets=RuntimeEnvironment.getApplication().assets
         fun size(name:String):Pair<Int,Int>{
             val options=BitmapFactory.Options().apply{inJustDecodeBounds=true}
@@ -25,7 +49,8 @@ class WeatherCloudMapIntegrationTest {
         }
         assertEquals(8192 to 4096,size("earth/day.jpg"))
         assertEquals(8192 to 4096,size("earth/night.jpg"))
-        for(name in listOf("earth/normal.jpg","earth/ocean.jpg","earth/clouds.png","weather/cloud_structure.png"))
+        assertEquals(8192 to 4096,size("earth/clouds.png"))
+        for(name in listOf("earth/normal.jpg","earth/ocean.jpg","weather/cloud_structure.png"))
             assertEquals(4096 to 2048,size(name))
     }
 
@@ -38,7 +63,7 @@ class WeatherCloudMapIntegrationTest {
         val center=WeatherPlace(0.0,-100.0)
         val clear=map.build(grid(center,0,0))
         val cloudy=map.build(grid(center,3,100))
-        assertEquals(4096,clear.width);assertEquals(2048,clear.height)
+        assertEquals(8192,clear.width);assertEquals(4096,clear.height)
         assertEquals(original.width,clear.width);assertEquals(original.height,clear.height)
         val x=(80.0/360*clear.width).toInt();val y=clear.height/2
         val values=mutableListOf<Int>()

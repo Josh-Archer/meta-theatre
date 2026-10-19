@@ -128,6 +128,9 @@ class EarthRenderer(private val activity: TheatreActivity) {
         val cloudMap = next ?: checkNotNull(originalCloudTexture)
         cloud.setTexture("cloudMap", cloudMap)
         surfaceMaterial?.setTexture("cloudMap", cloudMap)
+        val style = Vector4(if (snapshot == null) 0f else 1f, 0f, 0f, 0f)
+        cloud.setAttribute("cloudStyle", style)
+        surfaceMaterial?.setAttribute("cloudStyle", style)
         val previous = weatherTexture
         weatherTexture = next
         previous?.destroy()
@@ -136,9 +139,11 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private fun material(shader: String, maps: List<String>, transparent: Boolean = false): SceneMaterial {
         val attributes = arrayOf(
             SceneMaterialAttribute("sunPosition", SceneMaterialDataType.Vector4),
+            SceneMaterialAttribute("cloudStyle", SceneMaterialDataType.Vector4),
             *maps.map { SceneMaterialAttribute(it, SceneMaterialDataType.Texture2D) }.toTypedArray(),
         )
         return SceneMaterial.custom(shader, attributes, if (transparent) AlphaMode.TRANSLUCENT else AlphaMode.OPAQUE).apply {
+            setAttribute("cloudStyle", Vector4(0f, 0f, 0f, 0f))
             setDepthTest(DepthTest.LESS_OR_EQUAL)
             setDepthWrite(if (transparent) DepthWrite.DISABLE else DepthWrite.ENABLE)
             if (transparent) {
@@ -148,8 +153,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
         }.also { materials.add(it) }
     }
 
-    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.shaderSunPosition(skyFrame * SolarSystem.sunPosition(instant, zone))
+    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault(), worldSun: Vector3? = null) {
+        val position = SolarSystem.shaderSunPosition(worldSun ?: skyFrame * SolarSystem.sunPosition(instant, zone))
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 

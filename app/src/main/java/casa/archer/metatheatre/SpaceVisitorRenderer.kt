@@ -19,7 +19,21 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
     private val inspection = VisitorInspection()
     private val elapsedClock = PausableElapsedClock(clockMillis)
     private var worldFrame = Pose()
-    private fun pose(visitor: SpaceVisitors.Visitor, progress: Double) = worldFrame * SpaceVisitors.pose(visitor, progress)
+    private var earthCenter = EarthRenderer.CENTER
+    private var earthViewer = EarthRenderer.SEAT_EYE
+    private var zoomed = false
+    fun setEarthView(earth: Vector3, viewer: Vector3, zoom: Float) {
+        earthCenter = worldFrame.inverse() * earth
+        earthViewer = worldFrame.inverse() * viewer
+        zoomed = zoom > 1.001f
+        update()
+    }
+    private fun pose(visitor: SpaceVisitors.Visitor, progress: Double): Pose {
+        val original = SpaceVisitors.pose(visitor, progress)
+        val position = if (zoomed && visitor == SpaceVisitors.iss)
+            EarthClearance.position(original.t, radius(visitor)*visitor.displayScale, earthCenter, earthViewer) else original.t
+        return worldFrame * Pose(position,original.q)
+    }
     fun setWorldFrame(frame: Pose) {
         if (worldFrame == frame) return
         inspection.cancelGrab()
@@ -95,7 +109,7 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
         return result
     }
 
-    private fun radius(visitor: SpaceVisitors.Visitor) = if (visitor == SpaceVisitors.iss) 70f else 2.65f
+    private fun radius(visitor: SpaceVisitors.Visitor) = SpaceVisitors.radius(visitor)
     private fun startReturn(target: VisitorTarget, velocity: Vector3) {
         val entry = entries.firstOrNull { it.visitor.asset == target.asset } ?: return
         val now = elapsedClock.elapsedMillis()
