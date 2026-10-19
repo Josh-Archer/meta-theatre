@@ -14,8 +14,9 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
     suspend fun build(snapshot: WeatherSnapshot): Bitmap {
         // Interpolate coarse model readings independently of high-resolution cloud detail.
         // Five small fields replace two full-resolution float buffers and repeated per-cell map splats.
-        val fields = Array(5) { FloatArray(GRID_W * GRID_H) }
-        data class Sample(val x: Double,val y: Double,val z: Double,val cover: Float,val front: Float,val storm: Float,val fog: Float)
+        val fields = Array(7) { FloatArray(GRID_W * GRID_H) }
+        data class Sample(val x: Double,val y: Double,val z: Double,val cover: Float,val front: Float,val storm: Float,val fog: Float,
+            val windEast: Float, val windNorth: Float)
         val samples=snapshot.readings.map { reading ->
             val n=reading.place.normal()
             val pattern=reading.pattern
@@ -24,26 +25,30 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
                 CloudPattern.RAIN_FRONT,CloudPattern.SNOW_BANDS,CloudPattern.THUNDERHEAD->.6f
                 else->0f
             })
+            val wind = Math.toRadians(reading.windDirection)
             Sample(n.x.toDouble(),n.y.toDouble(),n.z.toDouble(),cover,
                 if(pattern==CloudPattern.RAIN_FRONT || pattern==CloudPattern.SNOW_BANDS)1f else 0f,
-                if(pattern==CloudPattern.THUNDERHEAD)1f else 0f,if(pattern==CloudPattern.FOG)1f else 0f)
+                if(pattern==CloudPattern.THUNDERHEAD)1f else 0f,if(pattern==CloudPattern.FOG)1f else 0f,
+                sin(wind).toFloat(), cos(wind).toFloat())
         }
         for(y in 0 until GRID_H){
             currentCoroutineContext().ensureActive()
             val lat=Math.PI*(.5-(y+.5)/GRID_H);val cl=cos(lat);val sl=sin(lat)
             for(x in 0 until GRID_W){
                 val lon=Math.PI*(2*(x+.5)/GRID_W-1);val nx=cl*sin(lon);val nz=cl*cos(lon)
-                var weight=0f;var cover=0f;var front=0f;var storm=0f;var fog=0f
+                var weight=0f;var cover=0f;var front=0f;var storm=0f;var fog=0f;var east=0f;var north=0f
                 for(sample in samples){
                     val dot=(nx*sample.x+sl*sample.y+nz*sample.z).coerceIn(-1.0,1.0)
                     if(dot<.88294759)continue
                     val angle=acos(dot)
                     val w=(exp(-angle*angle/.040)*((dot-.88294759)/.05).coerceIn(0.0,1.0)).toFloat()
                     weight+=w;cover+=sample.cover*w;front+=sample.front*w;storm+=sample.storm*w;fog+=sample.fog*w
+                    east+=sample.windEast*w;north+=sample.windNorth*w
                 }
                 val i=y*GRID_W+x
                 fields[0][i]=weight.coerceAtMost(1f)
-                if(weight>0){fields[1][i]=cover/weight;fields[2][i]=front/weight;fields[3][i]=storm/weight;fields[4][i]=fog/weight}
+                if(weight>0){fields[1][i]=cover/weight;fields[2][i]=front/weight;fields[3][i]=storm/weight;fields[4][i]=fog/weight
+                    fields[5][i]=east/weight;fields[6][i]=north/weight}
             }
         }
         val pixels=IntArray(width*height)
@@ -69,7 +74,10 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
                 val cells=(structure[0][index].toInt() and 255)/255f
                 val erosion=(structure[1][index].toInt() and 255)/255f
                 val bands=(structure[2][index].toInt() and 255)/255f
-                val shape=cells*(1-front*.8f)+bands*front*.8f
+                val windX = (x + (field(5) * 14).roundToInt() + width) % width
+                val windY = (y - (field(6) * 14).roundToInt()).coerceIn(0, height - 1)
+                val stretched = (structure[2][windY * width + windX].toInt() and 255) / 255f
+                val shape=cells*(1-front*.8f)+(bands*.6f + stretched*.4f)*front*.8f
                 val threshold=1-cover
                 val edge=((shape-threshold+.045f)/.09f).coerceIn(0f,1f)
                 val envelope=if(cover<=.001f)0f else if(cover>=.999f)1f else edge*edge*(3-2*edge)
@@ -77,10 +85,20 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
                 val depth=(.28f+.28f*erosion+.42f*old)*(1-fog*.48f)+storm*.12f
                 val value=(envelope*depth).coerceIn(0f,.98f)
                 val alpha=((old*(1-blend)+value*blend)*255).roundToInt().coerceIn(0,255)
-                pixels[index]=Color.argb(alpha,255,255,255)
+                val cloudHeight = (.5f + storm * .45f - fog * .4f).coerceIn(0f,1f)
+                // RGB stores a vertical profile for native shading; alpha retains full-resolution optical depth.
+                // Blend back to the original middle-height deck outside the current model footprint.
+                pixels[index]=Color.argb(alpha,
+                    ((.5f*(1-blend)+cloudHeight*blend)*255).roundToInt(),
+                    (storm*blend*255).roundToInt().coerceIn(0,255),
+                    (fog*blend*255).roundToInt().coerceIn(0,255))
             }
         }
-        return Bitmap.createBitmap(pixels,width,height,Bitmap.Config.ARGB_8888)
+        // RGB is data, independent of density alpha. Preserve it even in optically thin clouds.
+        return Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply {
+            setPremultiplied(false)
+            setPixels(pixels,0,width,0,0,width,height)
+        }
     }
     companion object {
         private const val GRID_W=128

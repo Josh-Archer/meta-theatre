@@ -80,6 +80,7 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
     val weatherOpen by model.weatherSettingsOpen.collectAsState()
+    val presetsOpen by model.viewingPresetsOpen.collectAsState()
     val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
         player.transport.map { it.title.isNotBlank() }.distinctUntilChanged()
@@ -100,6 +101,10 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
         }
         if (earthOpen && weatherOpen) {
             WeatherMenu(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && presetsOpen) {
+            ViewingPresetsMenu(model)
             return@MaterialTheme
         }
         if (earthOpen) {
@@ -304,10 +309,12 @@ private fun ShelfHeader(
     movieReady: Boolean,
     model: TheatreModel,
 ) {
+    val reconnect by model.plexReconnectAvailable.collectAsState()
+    val relink by model.plexLinkRequired.collectAsState()
     val action = when (browse) {
         Browse.SignedOut -> ""
         is Browse.Linking -> "Cancel"
-        else -> "Sign out"
+        else -> if (relink) "Relink Plex" else "Sign out"
     }
     Row(
         modifier = Modifier
@@ -317,9 +324,9 @@ private fun ShelfHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ZoneButton(
-            label = if (canGoBack) "Back" else "",
+            label = if (reconnect) "Reconnect" else if (canGoBack) "Back" else "",
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.BACK_X),
-        ) { if (canGoBack) model.back() }
+        ) { if (reconnect) model.reconnectPlex() else if (canGoBack) model.back() }
         Column(
             modifier = Modifier
                 .weight(PosterGrid.PLAYER_X - PosterGrid.BACK_X)
@@ -352,7 +359,7 @@ private fun ShelfHeader(
         ZoneButton(
             label = action,
             modifier = Modifier.fillMaxHeight().weight(1f - PosterGrid.SIGN_OUT_X),
-        ) { if (action.isNotBlank()) model.requestSignOut() }
+        ) { if (relink) model.link() else if (action.isNotBlank()) model.requestSignOut() }
     }
 }
 
@@ -479,9 +486,46 @@ private fun EarthMenu(model: TheatreModel, view: String) {
                 }
             }
         }
+        ZoneButton("Viewing presets", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .1f).dp), highlighted = true) {
+            model.viewingPresetsOpen.value = true
+        }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
                 color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun ViewingPresetsMenu(model: TheatreModel) {
+    val presets by model.viewingPresets.collectAsState()
+    val message by model.presetMessage.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * PresetControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Viewing presets", color = Ink, fontSize = 36.sp)
+            Text(message, color = Accent, fontSize = 24.sp)
+        }
+        presets.forEachIndexed { slot, preset ->
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * PresetControls.ROW).dp)) {
+                Box(Modifier.fillMaxHeight().weight(1f), contentAlignment = Alignment.Center) {
+                    Text("View ${slot + 1}\n${if (preset == null) "Empty" else "Saved"}",
+                        color = Ink, fontSize = 28.sp, textAlign = TextAlign.Center)
+                }
+                ZoneButton(if (preset == null) "" else "Restore ${slot + 1}", Modifier.fillMaxHeight().weight(1f)) {
+                    model.presetControl(PresetAction.RESTORE, slot)
+                }
+                ZoneButton("Save ${slot + 1}", Modifier.fillMaxHeight().weight(1f), highlighted = true) {
+                    model.presetControl(PresetAction.SAVE, slot)
+                }
+                ZoneButton(if (preset == null) "" else "Clear ${slot + 1}", Modifier.fillMaxHeight().weight(1f)) {
+                    model.presetControl(PresetAction.CLEAR, slot)
+                }
+            }
+        }
+        Row(Modifier.fillMaxSize()) {
+            ZoneButton("Reset view", Modifier.fillMaxHeight().weight(1f)) { model.presetControl(PresetAction.RESET) }
+            ZoneButton("Done", Modifier.fillMaxHeight().weight(1f)) { model.presetControl(PresetAction.DONE) }
         }
     }
 }

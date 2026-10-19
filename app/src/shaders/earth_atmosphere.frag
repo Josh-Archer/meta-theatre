@@ -6,9 +6,18 @@
 void main() {
     vec3 normal = normalize(earth.localNormal);
     float elevation = dot(normal, localSun());
-    float limb = pow(1.0 - clamp(dot(normal, localView()), 0.0, 1.0), 3.5);
-    float twilight = exp(-abs(elevation) * 18.0);
-    vec3 color = mix(vec3(0.065, 0.28, 0.65), vec3(0.58, 0.095, 0.018), twilight * 0.7);
-    float alpha = limb * 0.42 * (0.12 + 0.88 * dayWeight(elevation));
+    float viewCos = clamp(dot(normal, localView()), 0.0, 1.0);
+    // Finite shell chord: concentrates scattering near the surface's horizon instead of a painted rim.
+    float shellRadius = length(earth.localPosition);
+    float impact = shellRadius * sqrt(max(0.0, 1.0 - viewCos * viewCos));
+    float outerChord = sqrt(max(0.0, shellRadius * shellRadius - impact * impact));
+    float innerChord = sqrt(max(0.0, 1.0 - impact * impact));
+    float path = max(0.0, outerChord - innerChord);
+    float altitude = max(0.0, impact - 1.0);
+    float opticalDepth = path * exp(-altitude / 0.003) * 3.2;
+    float twilight = exp(-abs(elevation) * 20.0);
+    float rayleighPhase = 0.75 * (1.0 + pow(dot(localView(), localSun()), 2.0));
+    vec3 color = mix(vec3(0.09, 0.30, 0.72), vec3(0.75, 0.17, 0.035), twilight * 0.8) * rayleighPhase;
+    float alpha = (1.0 - exp(-opticalDepth)) * (0.025 + 0.975 * smoothstep(-0.16, 0.10, elevation));
     outColor = vec4(color, alpha);
 }

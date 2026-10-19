@@ -35,6 +35,15 @@ internal class TheatreState(context: Context) {
     }.getOrElse { ScreenSize(EarthOrbit.screenWidth, EarthOrbit.screenHeight) }
 
     fun saveSize(size: ScreenSize) { prefs.edit().putFloat("width", size.width).putFloat("height", size.height).apply() }
+    fun viewingPresets(): List<ViewingPreset?> = (0 until ViewingPreset.SLOTS).map { slot ->
+        runCatching { prefs.getString("viewing_preset_$slot", null)?.let { ViewingPreset.parse(JSONObject(it)) } }.getOrNull()
+    }
+    fun saveViewingPreset(slot: Int, preset: ViewingPreset?) {
+        require(slot in 0 until ViewingPreset.SLOTS && (preset == null || preset.valid()))
+        prefs.edit {
+            if (preset == null) remove("viewing_preset_$slot") else putString("viewing_preset_$slot", preset.json().toString())
+        }
+    }
     fun saveQuietCinemaEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("quiet_cinema_enabled", enabled).apply()
     }

@@ -57,6 +57,13 @@ internal class EarthExploration {
     }
 
     fun spinBy(degrees: Float) { if (degrees.isFinite()) spin = wrap(spin + degrees) }
+    fun restore(preset: ViewingPreset, viewer: Pose) {
+        require(preset.valid())
+        latitude = preset.latitude; longitude = preset.longitude; spin = preset.spin
+        val yaw = viewer.q.removePitchAndRoll()
+        skyFrame = Pose(viewer.t - yaw * EarthRenderer.SEAT_EYE, yaw)
+        worldFrame = skyFrame * observerFrame()
+    }
     fun earthPose() = renderPose(worldFrame, spin)
     fun sunPosition(instant: Instant, zone: ZoneId) = skyFrame * SolarSystem.sunPosition(instant, zone)
     private fun screenSpinDirection(viewer: Pose): Float {

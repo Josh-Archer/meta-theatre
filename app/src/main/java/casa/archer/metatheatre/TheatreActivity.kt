@@ -117,6 +117,19 @@ class TheatreActivity : AppSystemActivity() {
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onEarthControl = ::onEarthControl
+        model.onCapturePreset = {
+            val panel = screen
+            val size = grip?.screenSize()
+            if (!immersiveFocused || panel == null || size == null) null else
+                ViewingPreset.capture(scene.getViewerPose(), panel.getComponent<Transform>().transform,
+                    size, scene.getViewSceneRotation(), earthExploration)
+        }
+        model.onRestorePreset = ::restoreViewingPreset
+        model.onResetView = {
+            onEarthControl(EarthControl.HOME)
+            grip?.restorePlacement(ScreenPlacement.restore(scene.getViewerPose(), EarthOrbit.screenPose),
+                ScreenSize(EarthOrbit.screenWidth, EarthOrbit.screenHeight))
+        }
         model.onWeatherEnabled = weather::setEnabled
         model.onWeatherRefresh = weather::refresh
         weather.setEnabled(model.state.liveWeatherEnabled)
@@ -555,6 +568,23 @@ class TheatreActivity : AppSystemActivity() {
             grip?.bringScreenToView()
         }
         earthExploration.apply(control, scene.getViewerPose())
+        syncEarthView()
+    }
+
+    private fun restoreViewingPreset(preset: ViewingPreset) {
+        if (!immersiveFocused || !preset.valid()) return
+        grip?.cancelEarthGrab()
+        spaceVisitorRenderer?.cancelGrab()
+        val origin = scene.getViewOrigin()
+        scene.setViewOrigin(origin.x, origin.y, origin.z, preset.chairYaw)
+        val viewer = scene.getViewerPose()
+        earthExploration.restore(preset, viewer)
+        model.setScreenHidden(false)
+        grip?.restorePlacement(preset.screenAt(viewer), preset.size)
+        syncEarthView()
+    }
+
+    private fun syncEarthView() {
         model.earthViewLabel.value = earthExploration.label()
         earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spin, earthExploration.skyFrame)
         solarRenderer?.setWorldFrame(earthExploration.skyFrame)
@@ -600,6 +630,7 @@ class TheatreActivity : AppSystemActivity() {
 
     private fun onHeaderPress(x: Float) {
         when {
+            x < PosterGrid.BACK_X && model.plexReconnectAvailable.value -> model.reconnectPlex()
             x < PosterGrid.BACK_X && model.canGoBack.value -> {
                 Log.i(TAG, "back")
                 model.back()
@@ -607,7 +638,7 @@ class TheatreActivity : AppSystemActivity() {
             x >= PosterGrid.PLAYER_X && x < PosterGrid.SIGN_OUT_X ->
                 if (model.browse.value is Browse.Home) model.openLibraries() else model.showPlayer()
             x >= PosterGrid.SIGN_OUT_X -> {
-                model.requestSignOut()
+                if (model.plexLinkRequired.value) model.link() else model.requestSignOut()
             }
         }
     }

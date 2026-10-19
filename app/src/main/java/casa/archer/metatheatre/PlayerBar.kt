@@ -141,6 +141,7 @@ private fun PlayerContent(model: TheatreModel, player: ScreenPlayer) {
                 Text("Input: ${transport.videoColor}", color = Ink, fontSize = 26.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
             }
+            Text("Display: SDR · Rec.709", color = Muted, fontSize = 24.sp)
             val notice = movieQualityNotice(transport.quality, transport.sourceWidth, transport.sourceHeight,
                 transport.videoWidth, transport.videoHeight)
             Text(transport.detail.ifBlank { notice.ifBlank { transport.playbackMode } },
@@ -159,8 +160,17 @@ private fun PlayerContent(model: TheatreModel, player: ScreenPlayer) {
             Spacer(Modifier.height(10.dp))
             RailButton("Recently watched", targets, PlayerControl.LIBRARY, height = 74) { model.playerControl(PlayerControl.LIBRARY) }
             Spacer(Modifier.height(10.dp))
-            TrackKey("Quiet cinema: ${if (quietCinema) "On" else "Off"}", targets, PlayerControl.QUIET) {
-                model.playerControl(PlayerControl.QUIET)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(.65f)) {
+                    TrackKey("Quiet cinema: ${if (quietCinema) "On" else "Off"}", targets, PlayerControl.QUIET) {
+                        model.playerControl(PlayerControl.QUIET)
+                    }
+                }
+                Box(Modifier.weight(.35f)) {
+                    TrackKey("Reconnect", targets, PlayerControl.RECONNECT) {
+                        model.playerControl(PlayerControl.RECONNECT)
+                    }
+                }
             }
             Text("Hold one stop palm up to pause", color = Muted, fontSize = 24.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))

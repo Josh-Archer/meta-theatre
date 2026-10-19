@@ -2,6 +2,7 @@
 
 layout(std140, set = 3, binding = 0) uniform EarthUniform {
     vec4 sunPosition;
+    vec4 cloudStyle;
 } earthUniform;
 
 layout(location = 0) in EarthVertex {
@@ -53,4 +54,10 @@ vec2 cloudSunOffset(vec3 sun, mat3 frame, float elevation) {
     float latitudeScale = max(0.12, sqrt(max(0.0, 1.0 - frame[2].y * frame[2].y)));
     return vec2(dot(sun, frame[0]) / (6.2831853 * latitudeScale), dot(sun, frame[1]) / 3.1415927)
         * 0.0035 / max(0.14, elevation);
+}
+
+// Live maps encode cloud height, convection and low-cloud fraction in RGB.
+// The original map remains an alpha-only source, with a middle-altitude deck.
+vec3 cloudProfile(vec4 sampleValue) {
+    return mix(vec3(0.5, 0.0, 0.0), decodeData(sampleValue.rgb), earthUniform.cloudStyle.x);
 }

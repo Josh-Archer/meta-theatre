@@ -72,6 +72,14 @@ including pole and far-side views. Distant planets keep their clear exhibit slot
 as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
 
+Choose **Explore Earth → Viewing presets** to save up to three setups. Each slot
+remembers screen position and size, virtual chair direction, Earth latitude and
+longitude, and globe rotation. **Restore** places the saved arrangement around
+your current seated position, without restoring an old physical location. The
+presets stay on the headset across app restarts. **Reset view** returns to the
+home Earth view and default screen size. Restores use a snap change rather than
+continuous camera travel.
+
 Open **Explore Earth → Weather settings → Live weather: On** to apply current
 weather to the hemisphere you are viewing. Earth uses 8K surface/city-light maps
 and 4K cloud detail, with cloud relief and shadows. The live cloud field is
@@ -80,6 +88,13 @@ continuous rather than made from repeating cloud tiles. See the
 on the headset. Orbiting or spinning Earth selects a new region after the view
 settles; weather refreshes every 15 minutes while the app has focus. **Refresh**
 requests an update; **Off** restores the original cloud map.
+
+Clouds carry modeled height and storm/low-cloud profiles. Wind direction
+influences frontal detail; cloud shading includes a second self-shadow sample,
+soft ground shadows, and forward scattering. Atmospheric haze follows a thin
+shell's optical path near the horizon. City lights fade through cloud cover,
+and the night-side terrain retains a small ambient contribution. The 8K land
+and city textures, 4K cloud textures, and all three runtime meshes are preserved.
 
 Cloud coverage and weather codes come from Open-Meteo. The cloud shapes are
 modeled representations of those conditions, not satellite imagery. The weather
@@ -105,12 +120,22 @@ The headset plays the file directly. If the container or codec is rejected, it a
 
 The movie panel supports UHD 4K (3840 × 2160). When Plex has multiple copies of a
 movie, the app prefers the highest-resolution copy up to UHD, then the higher
-bitrate. Original-file playback keeps the source video quality. If it fails, the
+bitrate. Original-file playback keeps the source video quality. If its container
+or codec is incompatible, the
 app requests a Plex HLS stream up to 4K at 80 Mbps; if that also fails, it tries
 a 1080p compatibility transcode at 20 Mbps. The player bar shows the actual decoded
 resolution and labels the 1080p fallback. Lower-resolution sources remain lower
 resolution. See [UHD playback validation](art/validation/UHD_PLAYBACK.md) for checks
 and the remaining headset validation.
+
+Connection failures retry the current stream up to three times, with increasing
+delays, without changing quality. The player retains its last known position and
+whether you paused it, including pauses made while reconnecting. **Reconnect**
+on the side menu refreshes server connections and access before reopening the
+same movie at that bookmark. Opening another movie or closing playback cancels
+pending retries. Library connection failures offer **Reconnect**; a rejected
+account login offers **Relink Plex**. Neither failure clears the stored sign-in
+or watch history automatically.
 
 Movies use an opaque compositor layer with a direct decoder surface. The side
 menu's **Input** line reports the selected video's color metadata: Dolby Vision,
@@ -119,6 +144,10 @@ HDR metadata; a Plex transcode can change the color format even at 4K. Decoding
 uses the headset's native codecs, with decoder fallback enabled. See
 [viewpoint and video validation](art/validation/VIEWPOINT_VIDEO_REPAIR.md) for the
 local Dolby Vision/HDR10 decoder checks and their limits.
+
+The separate **Display: SDR · Rec.709** line identifies the app's configured
+compositor color space. An Input label of Dolby Vision describes the source;
+it does not establish Dolby Vision display output.
 
 The player rail has **Audio** and **Subtitles** buttons that cycle available
 tracks; subtitles include an **Off** choice. Original playback uses supported
