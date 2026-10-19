@@ -33,7 +33,7 @@ internal data class WeatherPlace(val latitude: Double, val longitude: Double) {
         abs(longitude), if (longitude < 0) "W" else "E")
     companion object {
         fun viewed(earth: Pose, viewer: Vector3): WeatherPlace {
-            val local = earth.q.inverse() * (viewer - earth.t).normalize()
+            val local = (earth.q.inverse() * (viewer - earth.t).normalize()).normalize()
             return WeatherPlace(Math.toDegrees(asin(local.y.toDouble().coerceIn(-1.0, 1.0))),
                 wrap(-100.0 + Math.toDegrees(atan2(local.x.toDouble(), local.z.toDouble()))))
         }

@@ -79,6 +79,15 @@ class TheatreModel(
     val earthViewLabel = MutableStateFlow("Equator")
     internal val weatherUi = MutableStateFlow(WeatherUi(enabled = state.liveWeatherEnabled))
     val weatherSettingsOpen = MutableStateFlow(false)
+    val earthSettingsOpen = MutableStateFlow(false)
+    val useCurrentLocation = MutableStateFlow(state.useCurrentLocation)
+    val realEarthRotation = MutableStateFlow(state.realEarthRotationEnabled)
+    val earthZoom = MutableStateFlow(1f)
+    val locationMessage = MutableStateFlow(if (state.useCurrentLocation) "Waiting for headset location." else "Current location is off.")
+    internal var onLocationEnabled: ((Boolean) -> Unit)? = null
+    internal var onLocationRequest: (() -> Unit)? = null
+    internal var onRealRotation: ((Boolean) -> Unit)? = null
+    internal var onEarthZoom: ((EarthSetting) -> Unit)? = null
     internal val viewingPresets = MutableStateFlow(state.viewingPresets())
     val viewingPresetsOpen = MutableStateFlow(false)
     val presetMessage = MutableStateFlow("Save a setup, then restore it around your current seat.")
@@ -139,6 +148,10 @@ class TheatreModel(
         onCapturePreset = null
         onRestorePreset = null
         onResetView = null
+        onLocationEnabled = null
+        onLocationRequest = null
+        onRealRotation = null
+        onEarthZoom = null
     }
 
     fun link() {
@@ -304,6 +317,7 @@ class TheatreModel(
         if (control == EarthControl.DONE) {
             earthControlsOpen.value = false
             weatherSettingsOpen.value = false
+            earthSettingsOpen.value = false
             viewingPresetsOpen.value = false
             if (earthReturnToPlayer) showPlayer()
             earthReturnToPlayer = false
@@ -332,7 +346,7 @@ class TheatreModel(
 
     fun weatherControlPress(x: Float, y: Float): Boolean {
         if (!earthControlsOpen.value) return false
-        if (viewingPresetsOpen.value) return false
+        if (viewingPresetsOpen.value || earthSettingsOpen.value) return false
         if (weatherSettingsOpen.value) {
             WeatherControls.at(x, y)?.let(::weatherControl)
             return true
@@ -346,13 +360,44 @@ class TheatreModel(
 
     fun earthControlPress(x: Float, y: Float): Boolean {
         if (!earthControlsOpen.value) return false
+        if (earthSettingsOpen.value) {
+            EarthSettingsControls.at(x,y)?.let(::earthSetting)
+            return true
+        }
         if (viewingPresetsOpen.value) {
             PresetControls.at(x, y)?.let { presetControl(it.action, it.slot) }
             return true
         }
         if (PresetControls.opener(x, y)) { viewingPresetsOpen.value = true; return true }
+        if (EarthSettingsControls.opener(x,y)) { earthSettingsOpen.value = true; return true }
         EarthControls.at(x, y)?.let(::earthControl)
         return true
+    }
+
+    internal fun earthSetting(setting: EarthSetting) {
+        when (setting) {
+            EarthSetting.LOCATION -> {
+                val enabled = !useCurrentLocation.value
+                useCurrentLocation.value = enabled
+                state.saveUseCurrentLocation(enabled)
+                onLocationEnabled?.invoke(enabled)
+            }
+            EarthSetting.ABOVE_ME -> {
+                if (!useCurrentLocation.value) {
+                    useCurrentLocation.value = true
+                    state.saveUseCurrentLocation(true)
+                    onLocationEnabled?.invoke(true)
+                } else onLocationRequest?.invoke()
+            }
+            EarthSetting.ROTATION -> {
+                val enabled = !realEarthRotation.value
+                realEarthRotation.value = enabled
+                state.saveRealEarthRotation(enabled)
+                onRealRotation?.invoke(enabled)
+            }
+            EarthSetting.DONE -> earthSettingsOpen.value = false
+            else -> onEarthZoom?.invoke(setting)
+        }
     }
 
     internal fun presetControl(action: PresetAction, slot: Int = 0) {
@@ -382,7 +427,7 @@ class TheatreModel(
 
     fun earthOrbitScroll(direction: Int): Boolean {
         if (!earthControlsOpen.value) return false
-        if (weatherSettingsOpen.value || viewingPresetsOpen.value) return true
+        if (weatherSettingsOpen.value || viewingPresetsOpen.value || earthSettingsOpen.value) return true
         if (direction != 0) earthControl(if (direction < 0) EarthControl.ORBIT_LEFT else EarthControl.ORBIT_RIGHT)
         return true
     }

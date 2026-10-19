@@ -11,6 +11,10 @@ internal class TheatreState(context: Context) {
     val liveWeatherEnabled: Boolean
         get() = prefs.getBoolean("live_weather_enabled", false)
     fun saveLiveWeatherEnabled(enabled: Boolean) { prefs.edit { putBoolean("live_weather_enabled", enabled) } }
+    val useCurrentLocation: Boolean get() = prefs.getBoolean("use_current_location", false)
+    val realEarthRotationEnabled: Boolean get() = prefs.getBoolean("real_earth_rotation", true)
+    fun saveUseCurrentLocation(enabled: Boolean) { prefs.edit { putBoolean("use_current_location", enabled) } }
+    fun saveRealEarthRotation(enabled: Boolean) { prefs.edit { putBoolean("real_earth_rotation", enabled) } }
     val quietCinemaEnabled: Boolean
         get() = prefs.getBoolean("quiet_cinema_enabled", false)
     val history: WatchHistory = runCatching {

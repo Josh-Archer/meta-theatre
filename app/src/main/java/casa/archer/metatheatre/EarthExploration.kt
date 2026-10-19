@@ -26,11 +26,14 @@ internal object EarthControls {
 }
 
 /** Geographic observer frame; rebase the environment so the seated view stays upright. */
-internal class EarthExploration {
+internal class EarthExploration(private val now: () -> Instant = Instant::now) {
     var latitude = 0f; private set
     var longitude = 0f; private set
     var spin = 0f; private set
-    val distance = (EarthRenderer.SEAT_EYE - EarthRenderer.CENTER).length()
+    var zoom = 1f; private set
+    val distance get() = BASE_DISTANCE / zoom
+    var realRotation = false; private set
+    private var rotationAnchor = now()
     var worldFrame = Pose(); private set
     // Distant exhibit slots and the civil-time Sun follow the seated view, not the globe's latitude.
     var skyFrame = Pose(); private set
@@ -48,8 +51,15 @@ internal class EarthExploration {
             EarthControl.SPIN_LEFT -> { spinBy(-15f * screenSpinDirection(viewer)); return }
             EarthControl.SPIN_RIGHT -> { spinBy(15f * screenSpinDirection(viewer)); return }
             EarthControl.DONE -> return
-            EarthControl.HOME -> { latitude = 0f; longitude = 0f; spin = 0f; worldFrame = Pose(); skyFrame = Pose(); return }
+            EarthControl.HOME -> {
+                latitude = 0f; longitude = 0f; spin = 0f; zoom = 1f; rotationAnchor = now()
+                worldFrame = Pose(); skyFrame = Pose(); return
+            }
         }
+        rebase(viewer)
+    }
+
+    private fun rebase(viewer: Pose) {
         val yaw = viewer.q.removePitchAndRoll()
         val anchor = Pose(viewer.t - yaw * EarthRenderer.SEAT_EYE, yaw)
         skyFrame = anchor
@@ -57,15 +67,41 @@ internal class EarthExploration {
     }
 
     fun spinBy(degrees: Float) { if (degrees.isFinite()) spin = wrap(spin + degrees) }
+    fun spinAt(instant: Instant = now()): Float = wrap(spin + if (realRotation) RealEarthTime.rotationSince(rotationAnchor, instant) else 0f)
+    fun setRealRotation(enabled: Boolean, instant: Instant = now()) {
+        if (enabled == realRotation) return
+        spin = spinAt(instant)
+        rotationAnchor = instant
+        realRotation = enabled
+    }
+    fun zoomBy(factor: Float, viewer: Pose) {
+        if (!factor.isFinite() || factor <= 0) return
+        val center = earthPose().t
+        val direction = center - viewer.t
+        if (direction.length() < .01f) return
+        val seatOffset = (skyFrame * EarthRenderer.SEAT_EYE - viewer.t).length()
+        val safeLimit = minOf(MAX_ZOOM, BASE_DISTANCE / (EarthRenderer.RADIUS * 1.012f + NEAR_CLEARANCE + seatOffset))
+            .coerceAtLeast(MIN_ZOOM)
+        zoom = (zoom * factor).coerceIn(MIN_ZOOM, safeLimit)
+        val target = viewer.t + direction.normalize() * distance
+        worldFrame = Pose(worldFrame.t + target - center, worldFrame.q.copy())
+    }
+    fun resetZoom(viewer: Pose) { zoomBy(1f / zoom, viewer) }
+    fun viewLocation(place: WeatherPlace, viewer: Pose, instant: Instant = now()) {
+        latitude = place.latitude.toFloat()
+        longitude = wrap((place.longitude - EarthLighting.CENTER_LONGITUDE).toFloat() + spinAt(instant))
+        rebase(viewer)
+    }
     fun restore(preset: ViewingPreset, viewer: Pose) {
         require(preset.valid())
-        latitude = preset.latitude; longitude = preset.longitude; spin = preset.spin
-        val yaw = viewer.q.removePitchAndRoll()
-        skyFrame = Pose(viewer.t - yaw * EarthRenderer.SEAT_EYE, yaw)
-        worldFrame = skyFrame * observerFrame()
+        latitude = preset.latitude; longitude = preset.longitude; spin = preset.spin; zoom = preset.zoom
+        rotationAnchor = now()
+        rebase(viewer)
     }
-    fun earthPose() = renderPose(worldFrame, spin)
-    fun sunPosition(instant: Instant, zone: ZoneId) = skyFrame * SolarSystem.sunPosition(instant, zone)
+    fun earthPose(instant: Instant = now()) = renderPose(worldFrame, spinAt(instant))
+    fun sunPosition(instant: Instant, zone: ZoneId): Vector3 = if (!realRotation)
+        skyFrame * SolarSystem.sunPosition(instant, zone)
+    else earthPose(instant).let { it.t + it.q * RealEarthTime.localSun(instant) * SolarSystem.SUN_DISTANCE }
     private fun screenSpinDirection(viewer: Pose): Float {
         val earth = earthPose()
         val upperSurface = ((viewer.t - earth.t).normalize() + Vector3(0f, .5f, 0f)).normalize()
@@ -78,7 +114,7 @@ internal class EarthExploration {
         return Vector3((cos(lat) * sin(lon)).toFloat(), sin(lat).toFloat(), (cos(lat) * cos(lon)).toFloat())
     }
     private fun observerFrame(): Pose {
-        if (latitude == 0f && longitude == 0f) return Pose()
+        if (latitude == 0f && longitude == 0f && zoom == 1f) return Pose()
         val lat = Math.toRadians(latitude.toDouble()); val lon = Math.toRadians(longitude.toDouble())
         // Geographic north tangent stays well-defined at the poles; world-up would be singular.
         val north = EarthRenderer.orientation() * Vector3((-sin(lat) * sin(lon)).toFloat(),
@@ -98,6 +134,11 @@ internal class EarthExploration {
     }
     private fun wrap(degrees: Float) = ((degrees + 180f) % 360f + 360f) % 360f - 180f
     companion object {
+        val BASE_DISTANCE = (EarthRenderer.SEAT_EYE - EarthRenderer.CENTER).length()
+        const val MIN_ZOOM = .75f
+        // Keep the entire nearby Roadster pass in front of Earth, including its bounding sphere.
+        val NEAR_CLEARANCE = SpaceVisitors.roadster.distance + SpaceVisitors.radius(SpaceVisitors.roadster)*SpaceVisitors.roadster.displayScale + 2f
+        val MAX_ZOOM = minOf(1.5f, BASE_DISTANCE / (EarthRenderer.RADIUS * 1.012f + NEAR_CLEARANCE))
         fun renderPose(frame: Pose, spin: Float) = Pose(frame * EarthRenderer.CENTER,
             frame.q * EarthRenderer.orientation() * Quaternion(pitch = 0f, yaw = spin, roll = 0f))
     }

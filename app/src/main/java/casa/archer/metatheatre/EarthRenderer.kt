@@ -153,8 +153,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
         }.also { materials.add(it) }
     }
 
-    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()) {
-        val position = SolarSystem.shaderSunPosition(skyFrame * SolarSystem.sunPosition(instant, zone))
+    fun update(instant: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault(), worldSun: Vector3? = null) {
+        val position = SolarSystem.shaderSunPosition(worldSun ?: skyFrame * SolarSystem.sunPosition(instant, zone))
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 

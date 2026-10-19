@@ -67,18 +67,51 @@ Point at exposed Earth outside the screen, hold an index/thumb pinch or controll
 trigger, and drag sideways to spin it. Release to keep its rotation. The menu's
 **Spin left** and **Spin right** buttons turn it 15 degrees per press. Surface,
 clouds, and atmosphere rotate together, with the existing shared Sun illuminating
-the geography. The visible hemisphere keeps the headset's local day/night cycle,
-including pole and far-side views. Distant planets keep their clear exhibit slots
+the geography. In real-time mode, UTC and seasonal solar declination determine
+day/night over the actual geography, including pole and far-side views. Distant planets keep their clear exhibit slots
 as you explore Earth. See [Earth exploration validation](art/validation/EARTH_EXPLORATION.md)
 for automated checks and the remaining headset checks.
 
 Choose **Explore Earth → Viewing presets** to save up to three setups. Each slot
 remembers screen position and size, virtual chair direction, Earth latitude and
-longitude, and globe rotation. **Restore** places the saved arrangement around
+longitude, globe rotation, and Earth zoom. **Restore** places the saved arrangement around
 your current seated position, without restoring an old physical location. The
 presets stay on the headset across app restarts. **Reset view** returns to the
 home Earth view and default screen size. Restores use a snap change rather than
 continuous camera travel.
+
+Open **Explore Earth → Location, zoom & rotation** for the new controls:
+
+- **Use my location** is off initially. Enable it and accept the headset's
+  approximate-location permission prompt. It uses Quest's Wi-Fi location service
+  to place your orbital view over that latitude/longitude, accounting for manual
+  and real-time globe rotation. **Above me** obtains another fix and recenters.
+  The choice is remembered for the next launch; location is read once per session
+  or explicit request, while the app is in the foreground. Turning it off or
+  navigating manually cancels pending fixes so a late callback cannot move you.
+- **Closer to Earth**, **Farther from Earth**, and **Reset zoom** change Earth's
+  distance while preserving the screen, chair/view origin, and world scale.
+  The range is 0.75× to approximately 1.28× at the home seat, with room for the
+  nearby Roadster's entire flyby. Planet exhibits and the distant ISS remain
+  clear of the expanded silhouette. Viewing presets remember zoom too.
+- **Real-time rotation** starts on. Earth turns eastward once in approximately
+  23h 56m 4s, using elapsed civil time rather than frame counts. It catches up
+  after headset sleep. Your view slowly drifts over the surface; **Above me**
+  recenters on your location. Turning it off freezes globe rotation and restores
+  the earlier artistic local-clock lighting cycle.
+
+The app requests only foreground approximate location access, with no GPS,
+background subscription, IP lookup, or coordinate logging. Coordinates remain in
+memory unless you explicitly save a viewing preset; presets stay on the headset.
+When live weather is also enabled, its existing viewed-region request can include
+your current region. Location failures show permission, Wi-Fi/settings, stale-fix,
+or timeout guidance instead of moving to a guessed location.
+
+See [Meta's location API](https://developers.meta.com/vr/documentation/native/android/move-location/),
+[NASA's sidereal/solar day explanation](https://science.nasa.gov/learn/basics-of-space-flight/chapter2-1/),
+and [NOAA's solar equations](https://gml.noaa.gov/grad/solcalc/solareqns.PDF).
+Implementation and headset evidence are in the
+[location/zoom/rotation checks](art/validation/EARTH_LOCATION_ZOOM_ROTATION.md).
 
 Open **Explore Earth → Weather settings → Live weather: On** to apply current
 weather to the hemisphere you are viewing. Earth uses 8K surface/city-light maps

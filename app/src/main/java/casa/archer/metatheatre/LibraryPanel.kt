@@ -80,6 +80,7 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
     val earthOpen by model.earthControlsOpen.collectAsState()
     val earthView by model.earthViewLabel.collectAsState()
     val weatherOpen by model.weatherSettingsOpen.collectAsState()
+    val earthSettings by model.earthSettingsOpen.collectAsState()
     val presetsOpen by model.viewingPresetsOpen.collectAsState()
     val libraryOpen by model.libraryOpen.collectAsState()
     val movieReady by remember(player) {
@@ -105,6 +106,10 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
         }
         if (earthOpen && presetsOpen) {
             ViewingPresetsMenu(model)
+            return@MaterialTheme
+        }
+        if (earthOpen && earthSettings) {
+            EarthSettingsMenu(model)
             return@MaterialTheme
         }
         if (earthOpen) {
@@ -489,9 +494,43 @@ private fun EarthMenu(model: TheatreModel, view: String) {
         ZoneButton("Viewing presets", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .1f).dp), highlighted = true) {
             model.viewingPresetsOpen.value = true
         }
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Point at Earth, hold a pinch or trigger, and drag sideways to spin it.",
-                color = Muted, fontSize = 24.sp, textAlign = TextAlign.Center)
+        ZoneButton("Location, zoom & rotation", Modifier.fillMaxSize(), highlighted = true) {
+            model.earthSettingsOpen.value = true
+        }
+    }
+}
+
+@Composable
+private fun EarthSettingsMenu(model: TheatreModel) {
+    val location by model.useCurrentLocation.collectAsState()
+    val rotation by model.realEarthRotation.collectAsState()
+    val zoom by model.earthZoom.collectAsState()
+    val message by model.locationMessage.collectAsState()
+    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.HEADER).dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Location, zoom & rotation", color = Ink, fontSize = 36.sp)
+            Text("Earth zoom: ${String.format(java.util.Locale.US, "%.2f", zoom)}×", color = Accent, fontSize = 26.sp)
+        }
+        EarthSettingsControls.rows.forEach { row ->
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.ROW).dp)) {
+                row.forEach { control ->
+                    val label = when(control) {
+                        EarthSetting.LOCATION -> "Use my location: ${if (location) "On" else "Off"}"
+                        EarthSetting.ROTATION -> "Real-time rotation: ${if (rotation) "On" else "Off"}"
+                        else -> control.label
+                    }
+                    ZoneButton(label, Modifier.fillMaxHeight().weight(1f),
+                        highlighted = control == EarthSetting.LOCATION && location || control == EarthSetting.ROTATION && rotation) {
+                        model.earthSetting(control)
+                    }
+                }
+            }
+        }
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(message, color = Ink, fontSize = 26.sp)
+            Text("Real-time: one turn in about 23h 56m. Your view slowly drifts over the surface; Above me recenters it.", color = Muted, fontSize = 24.sp)
+            Text("Location is read only while this app is open. Coordinates stay in memory unless you save a viewing preset. Live weather sends the viewed region to Open-Meteo when enabled.", color = Muted, fontSize = 24.sp)
         }
     }
 }
@@ -557,7 +596,7 @@ private fun WeatherMenu(model: TheatreModel) {
                 Text("Model time: $time", color = Muted, fontSize = 26.sp)
             }
             Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nRain, snow and storms are represented by their cloud shapes.", color = Muted, fontSize = 26.sp)
-            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. No headset location permission is used.", color = Muted, fontSize = 24.sp)
+            Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. Headset location is optional in Earth settings.", color = Muted, fontSize = 24.sp)
         }
     }
 }
