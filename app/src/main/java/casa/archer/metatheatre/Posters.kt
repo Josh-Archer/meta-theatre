@@ -10,6 +10,8 @@ import java.net.URLDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
 /** Small Plex posters for the shelf. The URL carries the token, so it is never logged. */
@@ -17,6 +19,8 @@ internal object Posters {
     private const val MAX_BYTES = 2_000_000
     private data class Poster(val image: ImageBitmap, val bytes: Int)
     private val downloads = Semaphore(3)
+    private class Pending(val mutex: Mutex = Mutex(), var users: Int = 0)
+    private val pending = mutableMapOf<String, Pending>()
     private val cache = object : LruCache<String, Poster>(16 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Poster): Int = value.bytes
     }
@@ -29,12 +33,21 @@ internal object Posters {
     suspend fun load(url: String): ImageBitmap? {
         if (url.isBlank()) return null
         cached(url)?.let { return it }
-        return downloads.withPermit {
-            // Recheck after waiting: another visible card may already have loaded this URL.
-            cached(url)?.let { return@withPermit it }
-            val poster = withContext(Dispatchers.IO) { fetch(url) } ?: return@withPermit null
-            cache.put(url, poster)
-            poster.image
+        val request = synchronized(pending) { pending.getOrPut(url) { Pending() }.also { it.users++ } }
+        try {
+            // Wait for this URL before taking a download slot; other posters can still load.
+            return request.mutex.withLock {
+                cached(url)?.let { return@withLock it }
+                downloads.withPermit {
+                    val poster = withContext(Dispatchers.IO) { fetch(url) } ?: return@withPermit null
+                    cache.put(url, poster)
+                    poster.image
+                }
+            }
+        } finally {
+            synchronized(pending) {
+                if (--request.users == 0) pending.remove(url)
+            }
         }
     }
 

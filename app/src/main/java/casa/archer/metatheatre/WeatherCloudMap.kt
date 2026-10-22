@@ -56,6 +56,11 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888).apply { setPremultiplied(false) }
         try {
             val pixels=IntArray(width)
+            // Rows beyond the model footprint retain the source alpha exactly. Avoid
+            // interpolating the blend field across those millions of pixels.
+            val activeRows = BooleanArray(GRID_H) { y ->
+                (0 until GRID_W).any { x -> fields[0][y * GRID_W + x] != 0f }
+            }
             val x0=IntArray(width);val x1=IntArray(width);val tx=FloatArray(width)
             for(x in 0 until width){
                 val gx=(x+.5f)*GRID_W/width-.5f;val floorX=floor(gx).toInt()
@@ -65,6 +70,12 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
                 currentCoroutineContext().ensureActive()
                 val gy=((y+.5f)*GRID_H/height-.5f).coerceIn(0f,GRID_H-1f)
                 val y0=floor(gy).toInt();val y1=min(GRID_H-1,y0+1);val ty=gy-y0
+                if (!activeRows[y0] && !activeRows[y1]) {
+                    val offset = y * width
+                    for (x in 0 until width) pixels[x] = Color.argb(original[offset+x].toInt() and 255,128,0,0)
+                    bitmap.setPixels(pixels,0,width,0,y,width,1)
+                    continue
+                }
                 for(x in 0 until width){
                     fun field(channel:Int):Float{
                         val data=fields[channel]
@@ -115,22 +126,30 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
         fun load(assets: AssetManager): WeatherCloudMap {
             fun decode(path: String)=assets.open(path).use{checkNotNull(BitmapFactory.decodeStream(it))}
             val base=decode("earth/clouds.png")
+            val width = base.width; val height = base.height
+            val original: ByteArray
+            try {
+                check(width==8192 && height==4096)
+                // Decode a row at a time instead of allocating another full-resolution IntArray.
+                original=ByteArray(width*height)
+                val row=IntArray(width)
+                for(y in 0 until height){
+                    base.getPixels(row,0,width,0,y,width,1)
+                    for(x in row.indices)original[y*width+x]=(row[x] ushr 24).toByte()
+                }
+            } finally { base.recycle() }
+            // Release the 128 MiB cloud decode before allocating the 32 MiB
+            // structure decode and its 24 MiB channel arrays.
             val pattern=decode("weather/cloud_structure.png")
             try {
-                check(base.width==8192 && base.height==4096 && pattern.width==4096 && pattern.height==2048)
-                // Decode a row at a time instead of allocating another full-resolution IntArray.
-                val original=ByteArray(base.width*base.height)
-                val channels=Array(3){ByteArray(pattern.width*pattern.height)};val row=IntArray(base.width)
-                for(y in 0 until base.height){
-                    base.getPixels(row,0,base.width,0,y,base.width,1)
-                    for(x in row.indices)original[y*base.width+x]=(row[x] ushr 24).toByte()
-                }
+                check(pattern.width==4096 && pattern.height==2048)
+                val channels=Array(3){ByteArray(pattern.width*pattern.height)};val row=IntArray(pattern.width)
                 for(y in 0 until pattern.height){
                     pattern.getPixels(row,0,pattern.width,0,y,pattern.width,1)
                     for(x in 0 until pattern.width){val i=y*pattern.width+x;channels[0][i]=(row[x] ushr 16).toByte();channels[1][i]=(row[x] ushr 8).toByte();channels[2][i]=row[x].toByte()}
                 }
-                return WeatherCloudMap(base.width,base.height,pattern.width,pattern.height,original,channels)
-            }finally{base.recycle();pattern.recycle()}
+                return WeatherCloudMap(width,height,pattern.width,pattern.height,original,channels)
+            }finally{pattern.recycle()}
         }
     }
 }
