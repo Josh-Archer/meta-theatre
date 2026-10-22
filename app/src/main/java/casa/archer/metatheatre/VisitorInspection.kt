@@ -95,8 +95,12 @@ internal class VisitorInspection {
         var hover: VisitorHit? = null
         if (!blocked) for (pointer in pointers) {
             if (!valid(pointer.pose)) continue
-            val hit = targets.filterNot { target -> returned.any { it.target.asset == target.asset } }
-                .mapNotNull { ScenePointer.hit(pointer, parked[it.asset] ?: it) }.minByOrNull { it.distance }
+            var hit: VisitorHit? = null
+            for (target in targets) {
+                if (returned.any { it.target.asset == target.asset }) continue
+                val candidate = ScenePointer.hit(pointer, parked[target.asset] ?: target) ?: continue
+                if (hit == null || candidate.distance < hit.distance) hit = candidate
+            }
             if (hit != null && (hover == null || hit.distance < hover.distance)) hover = hit
             if (grab == null && previous[pointer.id] == false && pointer.down && hit != null) {
                 val target = parked[hit.asset] ?: targets.first { it.asset == hit.asset }
