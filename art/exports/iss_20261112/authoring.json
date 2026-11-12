@@ -1,0 +1,11 @@
+{
+  "triangles": 37865,
+  "materials": 4,
+  "dimensions": [
+    109.0,
+    71.6553726196289,
+    14.644186973571777
+  ],
+  "staged_glb": "/home/gawly/code/meta-theatre/art/exports/iss_20261112/iss.glb",
+  "degenerate_tangent_fallbacks": 79
+}

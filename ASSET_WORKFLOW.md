@@ -1,5 +1,8 @@
 # 3D asset workflow
 
+The ISS material source, reviewed exports and validation are documented in
+[`art/ISS.md`](art/ISS.md).
+
 The live, local-time Earth, its editable Blender source, preserved static
 variants, Unreal sandbox copies, attribution, and validation notes are documented in
 [`art/EARTH.md`](art/EARTH.md).
