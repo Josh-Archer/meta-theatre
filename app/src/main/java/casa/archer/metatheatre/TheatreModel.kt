@@ -30,6 +30,56 @@ sealed interface Browse {
         val items: List<PlexItem>,
         val onOpen: (PlexItem) -> Unit,
     ) : Browse
+    data object JellyfinSignIn : Browse
+    data class JellyfinLinking(val code: String) : Browse
+    data class JellyfinLibraries(
+        val libraries: List<JellyfinLibrary>,
+        val onOpen: (JellyfinLibrary) -> Unit,
+    ) : Browse
+    data class JellyfinItems(
+        val title: String,
+        val items: List<JellyfinItem>,
+        val onOpen: (JellyfinItem) -> Unit,
+    ) : Browse
+}
+
+enum class JellyfinField { SERVER, USERNAME, PASSWORD }
+
+data class JellyfinForm(
+    val serverUrl: String = "",
+    val username: String = "",
+    val password: String = "",
+    val field: JellyfinField = JellyfinField.SERVER,
+) {
+    fun value(forField: JellyfinField): String = when (forField) {
+        JellyfinField.SERVER -> serverUrl
+        JellyfinField.USERNAME -> username
+        JellyfinField.PASSWORD -> password
+    }
+
+    fun with(forField: JellyfinField, value: String): JellyfinForm = when (forField) {
+        JellyfinField.SERVER -> copy(serverUrl = value)
+        JellyfinField.USERNAME -> copy(username = value)
+        JellyfinField.PASSWORD -> copy(password = value)
+    }
+}
+
+/** Panel fractions of the "Use Jellyfin" button on the signed-out screen. */
+internal object SignedOutLayout {
+    const val JELLYFIN_TOP = 0.33f
+    const val JELLYFIN_BOTTOM = 0.46f
+}
+
+/** Full-panel fractions for the Jellyfin sign-in screen (shared by Compose and ray presses). */
+internal object JellyfinSignInLayout {
+    const val FIELD_TOP = 0.16f
+    const val FIELD_HEIGHT = 0.09f
+    const val ACTION_TOP = 0.44f
+    const val ACTION_BOTTOM = 0.52f
+    fun fieldAt(y: Float): JellyfinField? {
+        val index = ((y - FIELD_TOP) / FIELD_HEIGHT).toInt()
+        return JellyfinField.entries.getOrNull(index)?.takeIf { y >= FIELD_TOP }
+    }
 }
 
 class TheatreModel(
@@ -37,6 +87,7 @@ class TheatreModel(
     private val player: ScreenPlayer,
     private val plex: PlexClient = PlexClient(context.applicationContext),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val jellyfin: JellyfinClient = JellyfinClient(context.applicationContext),
 ) {
     internal val state = TheatreState(context.applicationContext)
     private val history = state.history
@@ -60,6 +111,11 @@ class TheatreModel(
     val screenHidden = MutableStateFlow(false)
     val signOutConfirmation = MutableStateFlow(false)
     var onScreenHidden: ((Boolean) -> Unit)? = null
+    val jellyfinForm = MutableStateFlow(JellyfinForm())
+    private var jellyfinSecret: String? = null
+    private var jellyfinJob: Job? = null
+    private data class ActiveJellyfin(val itemId: String, val playSessionId: String?, val sourceId: String?)
+    private var activeJellyfin: ActiveJellyfin? = null
     val page = MutableStateFlow(0)
     val playerControlsOpen = MutableStateFlow(false)
     val librarySearchQuery = MutableStateFlow("")
@@ -123,16 +179,20 @@ class TheatreModel(
 
     fun start() {
         if (stack.isNotEmpty()) return
-        if (plex.token.isNullOrBlank()) {
-            show(Browse.SignedOut, replace = true)
-        } else {
-            showHome()
-            loadServers(restoreActive = true)
+        when {
+            !plex.token.isNullOrBlank() -> {
+                showHome()
+                loadServers(restoreActive = true)
+            }
+            jellyfin.isSignedIn -> loadJellyfinLibraries()
+            else -> show(Browse.SignedOut, replace = true)
         }
     }
 
     fun release() {
         saveCheckpoint()
+        jellyfinJob?.cancel()
+        jellyfinSecret = null
         cancelBrowseWork()
         player.onProgress = null
         player.onReconnect = null
@@ -196,6 +256,264 @@ class TheatreModel(
         error.value = null
         libraryOpen.value = true
         show(Browse.SignedOut, replace = true)
+    }
+
+    // -- Jellyfin ---------------------------------------------------------------
+
+    /** Signed-out presses: the Jellyfin zone opens its form; anything else links Plex as before. */
+    fun signedOutPress(x: Float, y: Float): Boolean {
+        if (browse.value != Browse.SignedOut) return false
+        if (y in SignedOutLayout.JELLYFIN_TOP..SignedOutLayout.JELLYFIN_BOTTOM) openJellyfinSignIn() else link()
+        return true
+    }
+
+    fun openJellyfinSignIn() {
+        error.value = null
+        jellyfinForm.value = jellyfinForm.value.copy(
+            serverUrl = jellyfin.session?.serverUrl ?: jellyfinForm.value.serverUrl,
+            password = "",
+        )
+        show(Browse.JellyfinSignIn)
+    }
+
+    /** Ray presses on the full-panel Jellyfin sign-in screen. */
+    fun jellyfinPress(x: Float, y: Float): Boolean {
+        if (browse.value == Browse.JellyfinSignIn) {
+            JellyfinSignInLayout.fieldAt(y)?.let { field ->
+                jellyfinForm.value = jellyfinForm.value.copy(field = field)
+                return true
+            }
+            if (y in JellyfinSignInLayout.ACTION_TOP..JellyfinSignInLayout.ACTION_BOTTOM) {
+                if (x < 0.5f) submitJellyfinSignIn() else startJellyfinQuickConnect()
+                return true
+            }
+            if (y >= PosterGrid.KEYBOARD_START && y < PosterGrid.FOOTER_START) {
+                when (val key = PosterGrid.libraryKeyboardKeyAt(x, y)) {
+                    is LibraryKeyboardKey.Character -> jellyfinAppend(key.value)
+                    LibraryKeyboardKey.Backspace -> jellyfinForm.value =
+                        jellyfinForm.value.let { it.with(it.field, it.value(it.field).dropLast(1)) }
+                    LibraryKeyboardKey.Space -> jellyfinAppend(' ')
+                    LibraryKeyboardKey.Done -> submitJellyfinSignIn()
+                    null -> Unit
+                }
+                return true
+            }
+            return y >= PosterGrid.HEADER_END
+        }
+        if (browse.value is Browse.JellyfinLinking) {
+            // Any press cancels the wait and returns to the form.
+            jellyfinJob?.cancel()
+            jellyfinSecret = null
+            show(Browse.JellyfinSignIn, replace = true)
+            return true
+        }
+        return false
+    }
+
+    internal fun jellyfinKey(key: LibraryKeyboardKey) {
+        when (key) {
+            is LibraryKeyboardKey.Character -> jellyfinAppend(key.value)
+            LibraryKeyboardKey.Backspace -> jellyfinForm.value =
+                jellyfinForm.value.let { it.with(it.field, it.value(it.field).dropLast(1)) }
+            LibraryKeyboardKey.Space -> jellyfinAppend(' ')
+            LibraryKeyboardKey.Done -> submitJellyfinSignIn()
+        }
+    }
+
+    internal fun jellyfinSelectField(field: JellyfinField) {
+        jellyfinForm.value = jellyfinForm.value.copy(field = field)
+    }
+
+    private fun jellyfinAppend(character: Char) {
+        val form = jellyfinForm.value
+        if (form.value(form.field).length >= 200) return
+        jellyfinForm.value = form.with(form.field, form.value(form.field) + character)
+    }
+
+    fun submitJellyfinSignIn() {
+        val form = jellyfinForm.value
+        jellyfinJob?.cancel()
+        error.value = null
+        loading.value = true
+        jellyfinJob = scope.launch {
+            try {
+                withContext(ioDispatcher) {
+                    jellyfin.authenticateByName(form.serverUrl, form.username, form.password)
+                }
+                jellyfinForm.value = jellyfinForm.value.copy(password = "")
+                loadJellyfinLibraries()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (problem: Exception) {
+                error.value = (problem as? JellyfinException)?.message ?: "Couldn't sign in to Jellyfin."
+            } finally {
+                loading.value = false
+            }
+        }
+    }
+
+    fun startJellyfinQuickConnect() {
+        val serverUrl = jellyfinForm.value.serverUrl
+        jellyfinJob?.cancel()
+        error.value = null
+        loading.value = true
+        jellyfinJob = scope.launch {
+            try {
+                val challenge = withContext(ioDispatcher) { jellyfin.initiateQuickConnect(serverUrl) }
+                jellyfinSecret = challenge.secret
+                show(Browse.JellyfinLinking(challenge.code), replace = true)
+                loading.value = false
+                val deadline = System.currentTimeMillis() + 5 * 60 * 1000
+                while (isActive && System.currentTimeMillis() < deadline) {
+                    delay(2000)
+                    val session = withContext(ioDispatcher) {
+                        jellyfin.pollQuickConnect(serverUrl, challenge.secret)
+                    } ?: continue
+                    jellyfinSecret = null
+                    loadJellyfinLibraries()
+                    return@launch
+                }
+                error.value = "The Jellyfin code expired. Try again."
+                show(Browse.JellyfinSignIn, replace = true)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (problem: Exception) {
+                error.value = (problem as? JellyfinException)?.message ?: "Couldn't start Quick Connect."
+                if (browse.value is Browse.JellyfinLinking) show(Browse.JellyfinSignIn, replace = true)
+            } finally {
+                loading.value = false
+            }
+        }
+    }
+
+    fun signOutJellyfin() {
+        signOutConfirmation.value = false
+        jellyfinJob?.cancel()
+        jellyfinSecret = null
+        reportJellyfinStopped(force = true)
+        activeJellyfin = null
+        closeToHome()
+        jellyfin.clearSession()
+        jellyfinForm.value = JellyfinForm()
+        error.value = null
+        libraryOpen.value = true
+        show(Browse.SignedOut, replace = true)
+    }
+
+    private fun loadJellyfinLibraries() {
+        launch("Couldn't reach Jellyfin") { generation ->
+            val views = withContext(ioDispatcher) { jellyfin.libraryViews() }
+            if (!isCurrentWork(generation)) return@launch
+            if (views.isEmpty()) throw JellyfinException("This Jellyfin user has no libraries")
+            show(
+                Browse.JellyfinLibraries(views) { library -> openJellyfinLibrary(library) },
+                replace = stack.lastOrNull() is Browse.JellyfinSignIn ||
+                    stack.lastOrNull() is Browse.JellyfinLinking || stack.isEmpty(),
+            )
+        }
+    }
+
+    fun openJellyfinLibrary(library: JellyfinLibrary) {
+        launch("Couldn't open ${library.title}") { generation ->
+            val found = withContext(ioDispatcher) {
+                jellyfin.items(
+                    parentId = library.id,
+                    includeItemTypes = if (library.kind == "show") listOf("Series") else listOf("Movie"),
+                )
+            }
+            if (!isCurrentWork(generation)) return@launch
+            show(
+                Browse.JellyfinItems(library.title, found) { item ->
+                    openJellyfinItem(item, library.title)
+                },
+            )
+        }
+    }
+
+    private fun openJellyfinItem(item: JellyfinItem, parentTitle: String) {
+        when {
+            item.type.equals("Movie", ignoreCase = true) ||
+                item.type.equals("Episode", ignoreCase = true) ||
+                item.type.equals("Video", ignoreCase = true) -> playJellyfin(item)
+            else -> launch("Couldn't open ${item.title}") { generation ->
+                val children = withContext(ioDispatcher) { jellyfin.children(item.id) }
+                if (!isCurrentWork(generation)) return@launch
+                val title = if (parentTitle.isBlank()) item.title else "$parentTitle  /  ${item.title}"
+                show(
+                    Browse.JellyfinItems(title, children) { child ->
+                        openJellyfinItem(child, item.title)
+                    },
+                )
+            }
+        }
+    }
+
+    private fun playJellyfin(item: JellyfinItem) {
+        reconnectJob?.cancel()
+        launch("Couldn't play ${item.title}") { generation ->
+            val playable = withContext(ioDispatcher) { jellyfin.playable(item) }
+            if (!isCurrentWork(generation)) return@launch
+            val info = withContext(ioDispatcher) {
+                runCatching { jellyfin.playbackInfo(item.id) }.getOrNull()
+            }
+            if (!isCurrentWork(generation)) return@launch
+            saveCheckpoint()
+            val resume = item.resumeMs.coerceAtLeast(0L)
+            activeJellyfin = ActiveJellyfin(
+                itemId = item.id,
+                playSessionId = info?.playSessionId,
+                sourceId = info?.mediaSources?.firstOrNull()?.id,
+            )
+            activeMovie = null
+            // Set the transport (including stereo) before the panel is created,
+            // so its registration can pick the matching stereo mode.
+            player.play(playable, resume)
+            onPrepareScreen?.invoke()
+            libraryOpen.value = false
+            onWatching?.invoke(true)
+            val started = activeJellyfin
+            if (started != null) {
+                scope.launch {
+                    runCatching {
+                        withContext(ioDispatcher) {
+                            jellyfin.reportPlaying(started.itemId, started.playSessionId, resume, started.sourceId)
+                        }
+                    }
+                }
+            }
+            Log.i(TAG, "jellyfin resume position=$resume")
+        }
+    }
+
+    private fun reportJellyfinProgress(positionMs: Long, ended: Boolean) {
+        val active = activeJellyfin ?: return
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    if (ended) {
+                        jellyfin.reportStopped(active.itemId, active.playSessionId, positionMs)
+                    } else {
+                        jellyfin.reportProgress(
+                            active.itemId, active.playSessionId, positionMs,
+                            isPaused = !player.transport.value.playing,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun reportJellyfinStopped(force: Boolean = false) {
+        val active = activeJellyfin ?: return
+        val position = player.transport.value.positionMs
+        scope.launch {
+            runCatching {
+                withContext(ioDispatcher) {
+                    jellyfin.reportStopped(active.itemId, active.playSessionId, position)
+                }
+            }
+        }
+        if (force) activeJellyfin = null
     }
 
     fun back() {
@@ -498,7 +816,14 @@ class TheatreModel(
     fun cancelSignOut() { signOutConfirmation.value = false }
 
     fun confirmSignOut() {
-        if (signOutConfirmation.value) signOut()
+        if (!signOutConfirmation.value) return
+        if (browse.value is Browse.JellyfinLibraries || browse.value is Browse.JellyfinItems ||
+            activeJellyfin != null
+        ) {
+            signOutJellyfin()
+        } else {
+            signOut()
+        }
     }
 
     /** Same normalized button row as the Compose prompt; all other presses are consumed. */
@@ -513,6 +838,9 @@ class TheatreModel(
     fun closeToHome() {
         reconnectJob?.cancel()
         saveCheckpoint()
+        if (activeJellyfin != null) {
+            reportJellyfinStopped(force = true)
+        }
         activeMovie = null
         history.leavePlayer()
         state.saveHistory()
@@ -546,6 +874,15 @@ class TheatreModel(
     }
 
     private fun checkpoint(position: Long, duration: Long, ended: Boolean, force: Boolean = false) {
+        if (activeJellyfin != null) {
+            val now = SystemClock.uptimeMillis()
+            if (force || ended || now - lastCheckpointMs >= 5_000L) {
+                lastCheckpointMs = now
+                reportJellyfinProgress(position, ended)
+                if (ended) activeJellyfin = null
+            }
+            return
+        }
         val key = activeMovie ?: return
         val now = SystemClock.uptimeMillis()
         history.progress(key, position, duration, ended)
@@ -679,8 +1016,10 @@ class TheatreModel(
                 resume, item.durationMs, System.currentTimeMillis()))
             state.saveHistory()
             activeMovie = key
-            onPrepareScreen?.invoke()
+            // Set the transport (including stereo) before the panel is created,
+            // so its registration can pick the matching stereo mode.
             player.play(playable, resume)
+            onPrepareScreen?.invoke()
             libraryOpen.value = false
             onWatching?.invoke(true)
             Log.i(TAG, "movie resume position=$resume")
@@ -735,7 +1074,8 @@ class TheatreModel(
             } catch (error: Exception) {
                 Log.e(TAG, "$fallback (${error.javaClass.simpleName})")
                 if (generation == workGeneration) {
-                    this@TheatreModel.error.value = (error as? PlexException)?.message ?: fallback
+                    this@TheatreModel.error.value = (error as? PlexException)?.message
+                        ?: (error as? JellyfinException)?.message ?: fallback
                     plexReconnectAvailable.value = true
                     plexLinkRequired.value = (error as? PlexException)?.failure == PlexFailure.ACCOUNT_AUTH
                 }
@@ -772,14 +1112,18 @@ class TheatreModel(
     }
 
     private fun supportsLibrarySearch(screen: Browse): Boolean = when (screen) {
-        is Browse.Home, is Browse.Servers, is Browse.Sections, is Browse.Items -> true
+        is Browse.Home, is Browse.Servers, is Browse.Sections, is Browse.Items,
+        is Browse.JellyfinLibraries, is Browse.JellyfinItems -> true
         else -> false
     }
 
     private fun canUseFilter(filter: LibrarySearchFilter, screen: Browse): Boolean = when (filter) {
         LibrarySearchFilter.ALL -> true
-        LibrarySearchFilter.MOVIES, LibrarySearchFilter.TV -> screen is Browse.Home || screen is Browse.Sections || screen is Browse.Items
-        LibrarySearchFilter.CONTINUE -> screen is Browse.Home || screen is Browse.Items
+        LibrarySearchFilter.MOVIES, LibrarySearchFilter.TV ->
+            screen is Browse.Home || screen is Browse.Sections || screen is Browse.Items ||
+                screen is Browse.JellyfinLibraries || screen is Browse.JellyfinItems
+        LibrarySearchFilter.CONTINUE -> screen is Browse.Home || screen is Browse.Items ||
+            screen is Browse.JellyfinItems
     }
 
     private fun refreshFilteredBrowse() {
@@ -796,6 +1140,7 @@ class TheatreModel(
                 LibrarySearchFilter.ALL -> true
                 LibrarySearchFilter.MOVIES -> type.equals("movie", ignoreCase = true)
                 LibrarySearchFilter.TV -> type.equals("show", ignoreCase = true) ||
+                    type.equals("series", ignoreCase = true) ||
                     type.equals("episode", ignoreCase = true) || type.equals("season", ignoreCase = true)
                 LibrarySearchFilter.CONTINUE -> viewOffsetMs > 0L
             }
@@ -812,6 +1157,12 @@ class TheatreModel(
             })
             is Browse.Items -> source.copy(items = source.items.filter { item ->
                 matches(item.title, item.type, item.viewOffsetMs)
+            })
+            is Browse.JellyfinLibraries -> source.copy(libraries = source.libraries.filter { library ->
+                query.isEmpty() || library.title.contains(query, ignoreCase = true)
+            })
+            is Browse.JellyfinItems -> source.copy(items = source.items.filter { item ->
+                matches(item.title, item.type, item.resumeMs)
             })
             else -> source
         }

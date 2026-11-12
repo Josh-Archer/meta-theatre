@@ -47,6 +47,9 @@ data class Playable(
     val sourceHeight: Int = 0,
     val audioStreams: List<PlexPlaybackStream> = emptyList(),
     val subtitleStreams: List<PlexPlaybackStream> = emptyList(),
+    val stereo: DetectedStereo = DetectedStereo.MONO,
+    val sourceKind: SourceKind = SourceKind.PLEX,
+    val sourceItemId: String = "",
 ) {
     override fun toString(): String = "Playable($title)"
 }

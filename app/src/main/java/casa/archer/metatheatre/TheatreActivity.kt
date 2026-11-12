@@ -563,7 +563,9 @@ class TheatreActivity : AppSystemActivity() {
                     shape = QuadShapeOptions(width = videoWidth, height = videoHeight),
                     display = PixelDisplayOptions(width = MovieQuality.UHD.width, height = MovieQuality.UHD.height),
                     rendering = MediaPanelRenderOptions(
-                        stereoMode = StereoMode.None,
+                        // The transport is set before the panel is created, so a
+                        // 3D title picks the matching packed stereo mode here.
+                        stereoMode = stereoModeFor(screenPlayer.transport.value.stereoFormat),
                         zIndex = -1,
                     ),
                     style = object : PanelStyleOptions() {
@@ -806,9 +808,10 @@ class TheatreActivity : AppSystemActivity() {
         if (model.scenePickerPress(x, y)) return
         if (model.sceneControlPress(x, y)) return
         if (model.librarySearchPress(x, y)) return
+        if (model.jellyfinPress(x, y)) return
         val browse = model.browse.value
         if (browse is Browse.SignedOut) {
-            model.link()
+            model.signedOutPress(x, y)
             return
         }
         if (y < PosterGrid.HEADER_END) {
@@ -866,6 +869,8 @@ class TheatreActivity : AppSystemActivity() {
                 model.openSection(browse.server, section)
             }
             is Browse.Items -> browse.items.getOrNull(index)?.let { item -> browse.onOpen(item) }
+            is Browse.JellyfinLibraries -> browse.libraries.getOrNull(index)?.let { library -> browse.onOpen(library) }
+            is Browse.JellyfinItems -> browse.items.getOrNull(index)?.let { item -> browse.onOpen(item) }
             else -> Unit
         }
     }
