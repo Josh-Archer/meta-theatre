@@ -103,6 +103,14 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
             SignOutPrompt(model)
             return@MaterialTheme
         }
+        if (browse == Browse.JellyfinSignIn) {
+            JellyfinSignInScreen(model)
+            return@MaterialTheme
+        }
+        if (browse is Browse.JellyfinLinking) {
+            JellyfinLinkingScreen((browse as Browse.JellyfinLinking).code, model)
+            return@MaterialTheme
+        }
         if (earthOpen && weatherOpen) {
             WeatherMenu(model)
             return@MaterialTheme
@@ -170,9 +178,11 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
 
 @Composable
 private fun SignOutPrompt(model: TheatreModel) {
+    val browse by model.browse.collectAsState()
+    val source = if (browse is Browse.JellyfinLibraries || browse is Browse.JellyfinItems) "Jellyfin" else "Plex"
     Box(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
         Column(Modifier.fillMaxWidth().offset(y = 300.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Sign out of Plex?", color = Ink, fontSize = 36.sp)
+            Text("Sign out of $source?", color = Ink, fontSize = 36.sp)
             Text("You will need to link your account again.", color = Muted, fontSize = 24.sp)
         }
         Row(Modifier.fillMaxWidth().offset(y = (PosterGrid.SIGN_OUT_CONFIRM_TOP * PosterGrid.PANEL_DP).dp)
@@ -184,7 +194,8 @@ private fun SignOutPrompt(model: TheatreModel) {
 }
 
 private fun searchAvailable(browse: Browse): Boolean = when (browse) {
-    is Browse.Home, is Browse.Servers, is Browse.Sections, is Browse.Items -> true
+    is Browse.Home, is Browse.Servers, is Browse.Sections, is Browse.Items,
+    is Browse.JellyfinLibraries, is Browse.JellyfinItems -> true
     else -> false
 }
 
@@ -228,8 +239,9 @@ private fun LibrarySearchBar(
         LibrarySearchFilter.entries.forEach { entry ->
             val enabled = when (entry) {
                 LibrarySearchFilter.ALL -> true
-                LibrarySearchFilter.MOVIES, LibrarySearchFilter.TV -> browse is Browse.Home || browse is Browse.Sections || browse is Browse.Items
-                LibrarySearchFilter.CONTINUE -> browse is Browse.Home || browse is Browse.Items
+                LibrarySearchFilter.MOVIES, LibrarySearchFilter.TV -> browse is Browse.Home || browse is Browse.Sections || browse is Browse.Items ||
+                    browse is Browse.JellyfinLibraries || browse is Browse.JellyfinItems
+                LibrarySearchFilter.CONTINUE -> browse is Browse.Home || browse is Browse.Items || browse is Browse.JellyfinItems
             }
             SearchControl(
                 label = entry.label,
@@ -688,6 +700,115 @@ private fun SignedOut(model: TheatreModel) {
         ) {
             Text("Link Plex", fontSize = 28.sp, color = Color(0xFF1A1408))
         }
+        Button(
+            onClick = { model.openJellyfinSignIn() },
+            modifier = Modifier.fillMaxWidth().height(96.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Zone),
+        ) {
+            Text("Use Jellyfin", fontSize = 28.sp, color = Ink)
+        }
+    }
+}
+
+@Composable
+private fun JellyfinSignInScreen(model: TheatreModel) {
+    val form by model.jellyfinForm.collectAsState()
+    val error by model.error.collectAsState()
+    val loading by model.loading.collectAsState()
+    Box(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxWidth().offset(y = 24.dp).padding(horizontal = 36.dp)) {
+            Text("Jellyfin", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text("Connect to your server", color = Ink, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
+            when {
+                error != null -> Text(error!!, color = Color(0xFFFFB4A8), fontSize = 20.sp, maxLines = 2)
+                loading -> Text("Loading…", color = Muted, fontSize = 20.sp)
+            }
+        }
+        JellyfinField.entries.forEachIndexed { index, field ->
+            val top = ((JellyfinSignInLayout.FIELD_TOP + index * JellyfinSignInLayout.FIELD_HEIGHT) *
+                PosterGrid.PANEL_DP).dp
+            val height = (JellyfinSignInLayout.FIELD_HEIGHT * PosterGrid.PANEL_DP).dp
+            val selected = form.field == field
+            Column(
+                modifier = Modifier.fillMaxWidth().offset(y = top).height(height)
+                    .padding(horizontal = 36.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (selected) Card else Zone)
+                    .border(if (selected) 3.dp else 0.dp, if (selected) Accent else Color.Transparent, RoundedCornerShape(12.dp))
+                    .semantics { role = Role.Button; onClick { model.jellyfinSelectField(field); true } }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    when (field) {
+                        JellyfinField.SERVER -> "Server URL"
+                        JellyfinField.USERNAME -> "Username"
+                        JellyfinField.PASSWORD -> "Password"
+                    },
+                    color = Muted, fontSize = 16.sp,
+                )
+                val value = form.value(field)
+                Text(
+                    when {
+                        field == JellyfinField.PASSWORD && value.isNotEmpty() -> "•".repeat(value.length.coerceAtMost(32))
+                        value.isEmpty() && field == JellyfinField.SERVER -> "http://192.168.1.10:8096"
+                        value.isEmpty() -> ""
+                        else -> value
+                    },
+                    color = if (value.isEmpty()) Muted else Ink,
+                    fontSize = 26.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth()
+                .offset(y = (JellyfinSignInLayout.ACTION_TOP * PosterGrid.PANEL_DP).dp)
+                .height(((JellyfinSignInLayout.ACTION_BOTTOM - JellyfinSignInLayout.ACTION_TOP) * PosterGrid.PANEL_DP).dp),
+        ) {
+            ZoneButton("Sign in", Modifier.fillMaxHeight().weight(1f)) { model.submitJellyfinSignIn() }
+            ZoneButton("Quick Connect", Modifier.fillMaxHeight().weight(1f)) { model.startJellyfinQuickConnect() }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .offset(y = (PosterGrid.KEYBOARD_START * PosterGrid.PANEL_DP).dp)
+                .height((PosterGrid.KEYBOARD_ROW_HEIGHT * PosterGrid.PANEL_DP * PosterGrid.LIBRARY_KEYBOARD_ROWS.size).dp),
+        ) {
+            PosterGrid.LIBRARY_KEYBOARD_ROWS.forEach { row -> JellyfinKeyboardRow(row, model) }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.JellyfinKeyboardRow(row: LibraryKeyboardRow, model: TheatreModel) {
+    Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        SpacerWidth(row.start)
+        row.keys.forEach { key ->
+            val label = when (key) {
+                is LibraryKeyboardKey.Character -> key.value.toString()
+                LibraryKeyboardKey.Backspace -> "⌫"
+                LibraryKeyboardKey.Space -> "Space"
+                LibraryKeyboardKey.Done -> "Done"
+            }
+            KeyboardKey(label, Modifier.weight(row.width / row.keys.size)) { model.jellyfinKey(key) }
+        }
+        SpacerWidth(1f - row.start - row.width)
+    }
+}
+
+@Composable
+private fun JellyfinLinkingScreen(code: String, model: TheatreModel) {
+    Box(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+        Column(Modifier.fillMaxSize().padding(36.dp)) {
+            Text("In Jellyfin, open Quick Connect and enter this code.", color = Muted, fontSize = 24.sp)
+            Text(
+                code,
+                color = Ink,
+                fontSize = 72.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 8.sp,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text("Point anywhere and press to cancel.", color = Muted, fontSize = 20.sp)
+        }
     }
 }
 
@@ -736,5 +857,9 @@ private fun titleFor(browse: Browse): String {
         is Browse.Servers -> "Servers"
         is Browse.Sections -> browse.server.name.ifBlank { "Libraries" }
         is Browse.Items -> browse.title
+        Browse.JellyfinSignIn -> "Jellyfin"
+        is Browse.JellyfinLinking -> "Quick Connect"
+        is Browse.JellyfinLibraries -> "Jellyfin"
+        is Browse.JellyfinItems -> browse.title
     }
 }

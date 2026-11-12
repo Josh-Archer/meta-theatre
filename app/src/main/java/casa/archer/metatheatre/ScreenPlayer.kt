@@ -31,6 +31,7 @@ data class Transport(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val playbackMode: String = "",
+    val stereoFormat: StereoFormat = StereoFormat.MONO,
     val quality: PlaybackQuality = PlaybackQuality.ORIGINAL,
     val sourceWidth: Int = 0,
     val sourceHeight: Int = 0,
@@ -151,6 +152,7 @@ class ScreenPlayer internal constructor(
             pending = item
             transport.value = Transport(
                 title = item.title, subtitle = item.subtitle, detail = "Opening the screen", positionMs = pendingPositionMs,
+                stereoFormat = item.stereo.format,
                 quality = quality, sourceWidth = item.sourceWidth, sourceHeight = item.sourceHeight,
                 playWhenReady = pendingPlayWhenReady,
             )
@@ -454,7 +456,9 @@ class ScreenPlayer internal constructor(
             subtitle = subtitle,
             detail = "Buffering",
             positionMs = positionMs,
-            playbackMode = route.label,
+            playbackMode = listOf(route.label, item.stereo.label)
+                .filter { it.isNotBlank() }.joinToString(" · "),
+            stereoFormat = item.stereo.format,
             quality = quality,
             sourceWidth = item.sourceWidth,
             sourceHeight = item.sourceHeight,

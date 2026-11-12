@@ -94,6 +94,8 @@ internal fun shelfSize(browse: Browse): Int = when (browse) {
     is Browse.Servers -> browse.servers.size
     is Browse.Sections -> browse.sections.size
     is Browse.Items -> browse.items.size
+    is Browse.JellyfinLibraries -> browse.libraries.size
+    is Browse.JellyfinItems -> browse.items.size
     else -> 0
 }
 
@@ -116,6 +118,18 @@ internal fun shelfTiles(browse: Browse): List<ShelfTile>? {
         }
         is Browse.Items -> browse.items.map { item ->
             ShelfTile(item.title, item.subtitle, item.poster)
+        }
+        is Browse.JellyfinLibraries -> browse.libraries.map { library ->
+            ShelfTile(
+                library.title,
+                if (library.kind == "show") "TV library" else "Movie library",
+                library.poster,
+            )
+        }
+        is Browse.JellyfinItems -> browse.items.map { item ->
+            val resume = item.resumeMs
+            val label = if (resume > 0) "Resume at ${clock(resume)}" else jellyfinItemSubtitle(item)
+            ShelfTile(item.title, label, item.poster)
         }
         else -> null
     }
