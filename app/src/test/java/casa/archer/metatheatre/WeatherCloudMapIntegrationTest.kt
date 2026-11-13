@@ -1,5 +1,6 @@
 package casa.archer.metatheatre
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import kotlinx.coroutines.test.runTest
@@ -10,7 +11,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.nio.ByteBuffer
 import java.time.Instant
+import java.util.zip.CRC32
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk=[34])
@@ -87,5 +90,85 @@ class WeatherCloudMapIntegrationTest {
             }
         }
         original.recycle();clear.recycle();cloudy.recycle();seam.recycle();polar.recycle()
+    }
+
+    @Test fun verifiedHighCloudIsWispyWhileGenericPartlyCloudyStaysBillowingAt8k() = runTest {
+        val map = WeatherCloudMap.load(RuntimeEnvironment.getApplication().assets)
+        val center = WeatherPlace(0.0, -100.0)
+        val time = Instant.parse("2026-10-17T12:00:00Z")
+        fun snap(code: Int, cover: Int, low: Int? = null, mid: Int? = null, high: Int? = null) =
+            WeatherSnapshot(center, WeatherPlace.grid(center).map {
+                WeatherReading(it, time, code, cover, 12.0, 180.0, low, mid, high)
+            })
+        fun crc(bitmap: Bitmap): Long {
+            val sum = CRC32()
+            val row = IntArray(bitmap.width)
+            val bytes = ByteBuffer.allocate(bitmap.width * 4)
+            for (rowY in 0 until bitmap.height) {
+                bitmap.getPixels(row, 0, row.size, 0, rowY, row.size, 1)
+                bytes.clear()
+                row.forEach(bytes::putInt)
+                sum.update(bytes.array())
+            }
+            return sum.value
+        }
+        val genericSnap = snap(2, 45)
+        val lowerSnap = snap(2, 45, 40, 25, 10)
+        val highSnap = snap(2, 45, 0, 4, 70)
+        val overcastSnap = snap(3, 100, 90, 40, 15)
+        val stormSnap = snap(95, 80, 30, 40, 95)
+        assertEquals(CloudPattern.CUMULUS, genericSnap.central.pattern)
+        assertEquals(CloudPattern.CUMULUS, lowerSnap.central.pattern)
+        assertEquals(CloudPattern.CIRRUS, highSnap.central.pattern)
+        assertEquals(CloudPattern.OVERCAST, overcastSnap.central.pattern)
+        assertEquals(CloudPattern.THUNDERHEAD, stormSnap.central.pattern)
+        assertEquals(CloudPattern.THUNDERHEAD, snap(95, 80).central.pattern)
+        var genericCrc = 0L
+        var genericRed = 0
+        val genericAlpha = LongArray(121 * 121)
+        val generic = map.build(genericSnap)
+        try {
+            assertEquals(8192, generic.width); assertEquals(4096, generic.height); assertFalse(generic.isPremultiplied)
+            genericCrc = crc(generic)
+            val x = (80.0 / 360 * generic.width).toInt(); val y = generic.height / 2
+            genericRed = Color.red(generic.getPixel(x, y))
+            var i = 0
+            for (dy in -60..60) for (dx in -60..60) genericAlpha[i++] = Color.alpha(generic.getPixel(x + dx, y + dy)).toLong()
+        } finally { generic.recycle() }
+        val lower = map.build(lowerSnap)
+        try {
+            assertEquals(8192 to 4096, lower.width to lower.height)
+            assertEquals("A weak high-cloud fraction must not change partly cloudy morphology", genericCrc, crc(lower))
+        } finally { lower.recycle() }
+        val high = map.build(highSnap)
+        try {
+            assertEquals(8192 to 4096, high.width to high.height)
+            assertNotEquals("Verified high cloud must change the 8K morphology", genericCrc, crc(high))
+            val x = (80.0 / 360 * high.width).toInt(); val y = high.height / 2
+            val highRed = Color.red(high.getPixel(x, y))
+            assertTrue(highRed > genericRed + 70)
+            var highAlpha = 0L; var genericSum = 0L; var different = 0; var i = 0
+            for (dy in -60..60) for (dx in -60..60) {
+                val alpha = Color.alpha(high.getPixel(x + dx, y + dy))
+                highAlpha += alpha; genericSum += genericAlpha[i]
+                if (alpha.toLong() != genericAlpha[i]) different++
+                i++
+            }
+            assertTrue("High-cloud filaments must differ across the viewed region", different > 1000)
+            assertTrue("The same total cover should read thinner as high cloud", highAlpha < genericSum)
+            val overcast = map.build(overcastSnap)
+            try {
+                assertEquals(8192 to 4096, overcast.width to overcast.height)
+                assertTrue(highRed > Color.red(overcast.getPixel(x, y)) + 70)
+            } finally { overcast.recycle() }
+        } finally { high.recycle() }
+        val storm = map.build(stormSnap)
+        val stormPlain = map.build(snap(95, 80))
+        try {
+            assertEquals(8192 to 4096, storm.width to storm.height)
+            assertEquals("Thunderstorms keep their profile when a high layer is also reported", crc(stormPlain), crc(storm))
+            val x = (80.0 / 360 * storm.width).toInt(); val y = storm.height / 2
+            assertTrue(Color.green(storm.getPixel(x, y)) > 200)
+        } finally { storm.recycle(); stormPlain.recycle() }
     }
 }
