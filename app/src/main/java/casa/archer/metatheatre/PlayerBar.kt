@@ -44,6 +44,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import com.meta.spatial.uiset.theme.SpatialTheme
+import com.meta.spatial.uiset.theme.LocalColorScheme
+import com.meta.spatial.uiset.theme.darkSpatialColorScheme
+
 private val Ink = Color(0xFFF4F1EA)
 private val Muted = Color(0xFFD5DCE8)
 private val Accent = Color(0xFFDFC58F)
@@ -55,9 +59,11 @@ private val Outline = Color(0xFF3A465A)
 fun PlayerBar(model: TheatreModel, player: ScreenPlayer) {
     val open by model.playerControlsOpen.collectAsState()
     val hidden by model.screenHidden.collectAsState()
-    Box(Modifier.fillMaxSize()) {
+    SpatialTheme(colorScheme = darkSpatialColorScheme()) {
+      Box(Modifier.fillMaxSize()) {
         PlayerContent(model, player)
         PanelReticle(model, PointerPanel.PLAYER, open && !hidden)
+      }
     }
 }
 
@@ -80,9 +86,9 @@ private fun PlayerContent(model: TheatreModel, player: ScreenPlayer) {
     Column(
         modifier = Modifier.fillMaxSize()
             .graphicsLayer { this.alpha = alpha }
-            .clip(RoundedCornerShape(36.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF1B2433), Color(0xFF111722))))
-            .border(1.dp, Outline, RoundedCornerShape(36.dp))
+            .clip(SpatialTheme.shapes.large)
+            .background(LocalColorScheme.current.panel)
+            .border(1.dp, Color.White.copy(alpha = .22f), SpatialTheme.shapes.large)
             .padding(30.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().weight(0.13f), verticalArrangement = Arrangement.Center) {

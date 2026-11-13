@@ -35,7 +35,7 @@ internal data class WeatherPlace(val latitude: Double, val longitude: Double) {
         fun viewed(earth: Pose, viewer: Vector3): WeatherPlace {
             val local = (earth.q.inverse() * (viewer - earth.t).normalize()).normalize()
             return WeatherPlace(Math.toDegrees(asin(local.y.toDouble().coerceIn(-1.0, 1.0))),
-                wrap(-100.0 + Math.toDegrees(atan2(local.x.toDouble(), local.z.toDouble()))))
+                wrap(EarthLighting.CENTER_LONGITUDE - Math.toDegrees(atan2(local.x.toDouble(), local.z.toDouble()))))
         }
         fun wrap(degrees: Double) = ((degrees + 180) % 360 + 360) % 360 - 180
         /** 49 readings span the visible hemisphere. Tangent construction also works at both poles. */
@@ -95,6 +95,8 @@ internal data class WeatherReading(val place: WeatherPlace, val time: Instant, v
     val highCloudWeight get() = CloudPattern.highCloudWeight(code, cloudCover, cloudCoverLow, cloudCoverMid, cloudCoverHigh)
 }
 internal data class WeatherSnapshot(val center: WeatherPlace, val readings: List<WeatherReading>) {
+    /** Only timestamps are ignored; all geography, layers, coverage and wind remain in the key. */
+    fun appearance(): List<WeatherReading> = readings.map { it.copy(time = Instant.EPOCH) }
     val central get() = readings[readings.size / 2]
     val time get() = readings.minOf { it.time }
     fun fresh(now: Instant) = time <= now.plusSeconds(300) && time >= now.minusSeconds(30 * 60)

@@ -36,6 +36,8 @@ class EarthSettingsIntegrationTest {
         val model=TheatreModel(context,player)
         val locationRequests=mutableListOf<Boolean>();var refreshes=0;var rotation:Boolean?=null
         val zooms=mutableListOf<EarthSetting>()
+        var settings=0;var precise=0
+        model.onLocationSettings={settings++};model.onPreciseLocation={precise++}
         model.onLocationEnabled=locationRequests::add
         model.onLocationRequest={refreshes++}
         model.onRealRotation={rotation=it}
@@ -59,10 +61,20 @@ class EarthSettingsIntegrationTest {
             // The SDK can deliver a native Compose click instead of the custom hand ray.
             compose.onNodeWithText("Above me").performClick()
             assertEquals(2,refreshes)
+            compose.onNodeWithText("Precise Wi-Fi fix").performClick()
+            compose.onNodeWithText("Location settings").performClick()
+            assertEquals(1,precise);assertEquals(1,settings)
             press("Real-time rotation: On")
             assertEquals(false,rotation);assertFalse(TheatreState(context).realEarthRotationEnabled)
             press("Closer to Earth");press("Farther from Earth");press("Reset zoom")
             assertEquals(listOf(EarthSetting.ZOOM_IN,EarthSetting.ZOOM_OUT,EarthSetting.ZOOM_RESET),zooms)
+            compose.runOnIdle{
+                model.earthZoom.value=9.2f
+                model.earthZoomMessage.value="Closest safe view · screen and head clearance protected"
+                model.locationMessage.value="Still waiting for a fresh fix. Approximate location may be throttled; try Precise Wi-Fi fix or Location settings."
+            }
+            compose.onNodeWithText(model.locationMessage.value).assertIsDisplayed()
+            compose.onNodeWithText(model.earthZoomMessage.value).assertIsDisplayed()
             compose.runOnIdle{captureUiFixture(compose.activity,"earth-location-zoom-rotation.png")}
             press("Use my location: On")
             assertFalse(TheatreState(context).useCurrentLocation)

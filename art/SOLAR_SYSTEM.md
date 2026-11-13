@@ -1,5 +1,14 @@
 # Meta Theatre solar environment — 2026-10-04
 
+The [November 11 celestial pass](validation/CELESTIAL_20261111.md) adds NASA
+LROC lunar color, LOLA crater normals, differentiated surface lighting and the
+current sky grade. Its versioned Blender source and review steps supersede the
+older Moon material and regeneration steps below.
+
+The 2026-10-19 sky upgrade supersedes the 4K map and sky-memory figures below.
+See [SPACE.md](SPACE.md) for the 8K source, publishing steps and current checks.
+Run its final sky publishing step after regenerating the legacy solar assets.
+
 The native Quest app now shows all eight planets, the Moon, a visible moving
 Sun, Saturn's main rings, and a NASA catalog star panorama. Earth remains the
 foreground globe at the equator beneath the USA (100°W). The other bodies

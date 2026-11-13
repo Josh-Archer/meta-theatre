@@ -48,6 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.meta.spatial.uiset.theme.SpatialTheme
+import com.meta.spatial.uiset.theme.LocalColorScheme
+import com.meta.spatial.uiset.theme.darkSpatialColorScheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -59,12 +62,19 @@ private val Accent = Color(0xFFD7B56D)
 private val Zone = Color(0xFF2A3342)
 
 @Composable
+private fun Modifier.horizonPanel(): Modifier = clip(SpatialTheme.shapes.large)
+    .background(LocalColorScheme.current.panel)
+    .border(1.dp, Color.White.copy(alpha = .22f), SpatialTheme.shapes.large)
+
+@Composable
 fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val libraryOpen by model.libraryOpen.collectAsState()
     val hidden by model.screenHidden.collectAsState()
-    Box(Modifier.fillMaxSize()) {
+    SpatialTheme(colorScheme = darkSpatialColorScheme()) {
+      Box(Modifier.fillMaxSize()) {
         LibraryContent(model, player)
         PanelReticle(model, PointerPanel.LIBRARY, libraryOpen && !hidden)
+      }
     }
 }
 
@@ -94,7 +104,7 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
 
     MaterialTheme(colorScheme = darkColorScheme(primary = Accent, onPrimary = Color(0xFF1A1408))) {
         if (!libraryOpen && movieReady) {
-            Box(Modifier.fillMaxSize().border(4.dp, Accent).semantics {
+            Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = .28f), SpatialTheme.shapes.large).semantics {
                 contentDescription = "Screen frame: drag edges to move, corners to resize"
             })
             return@MaterialTheme
@@ -134,9 +144,7 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Panel)
-                .border(4.dp, Accent)
-                .clipToBounds(),
+                .horizonPanel(),
         ) {
             ShelfHeader(browse, canGoBack, loading, error, movieReady, model)
             if (searchAvailable(browse)) {
@@ -180,7 +188,7 @@ private fun LibraryContent(model: TheatreModel, player: ScreenPlayer) {
 private fun SignOutPrompt(model: TheatreModel) {
     val browse by model.browse.collectAsState()
     val source = if (browse is Browse.JellyfinLibraries || browse is Browse.JellyfinItems) "Jellyfin" else "Plex"
-    Box(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+    Box(Modifier.fillMaxSize().horizonPanel()) {
         Column(Modifier.fillMaxWidth().offset(y = 300.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Sign out of $source?", color = Ink, fontSize = 36.sp)
             Text("You will need to link your account again.", color = Muted, fontSize = 24.sp)
@@ -492,7 +500,7 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
 
 @Composable
 private fun EarthMenu(model: TheatreModel, view: String) {
-    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+    Column(Modifier.fillMaxSize().horizonPanel()) {
         Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthControls.HEADER).dp)) {
             Column(Modifier.fillMaxHeight().weight(.72f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
@@ -524,12 +532,15 @@ private fun EarthSettingsMenu(model: TheatreModel) {
     val location by model.useCurrentLocation.collectAsState()
     val rotation by model.realEarthRotation.collectAsState()
     val zoom by model.earthZoom.collectAsState()
+    val zoomMessage by model.earthZoomMessage.collectAsState()
+    val detailMessage by model.earthDetailMessage.collectAsState()
     val message by model.locationMessage.collectAsState()
-    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+    Column(Modifier.fillMaxSize().horizonPanel()) {
         Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.HEADER).dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("Location, zoom & rotation", color = Ink, fontSize = 36.sp)
-            Text("Earth zoom: ${String.format(java.util.Locale.US, "%.2f", zoom)}×", color = Accent, fontSize = 26.sp)
+            Text("Surface zoom: ${String.format(java.util.Locale.US, "%.1f", zoom)}×", color = Accent, fontSize = 26.sp)
+            if (zoomMessage.isNotEmpty()) Text(zoomMessage, color = Muted, fontSize = 24.sp)
         }
         EarthSettingsControls.rows.forEach { row ->
             Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * EarthSettingsControls.ROW).dp)) {
@@ -540,7 +551,7 @@ private fun EarthSettingsMenu(model: TheatreModel) {
                         else -> control.label
                     }
                     ZoneButton(label, Modifier.fillMaxHeight().weight(1f),
-                        acceptPointerClick = control == EarthSetting.ABOVE_ME,
+                        acceptPointerClick = control in listOf(EarthSetting.ABOVE_ME, EarthSetting.LOCATION_SETTINGS, EarthSetting.PRECISE_LOCATION),
                         highlighted = control == EarthSetting.LOCATION && location || control == EarthSetting.ROTATION && rotation) {
                         model.earthSetting(control)
                     }
@@ -548,9 +559,12 @@ private fun EarthSettingsMenu(model: TheatreModel) {
             }
         }
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(detailMessage, color = Ink, fontSize = 26.sp)
+            Text("Satellite texture: EOxCloudless by EOX IT Services GmbH (modified Copernicus Sentinel data 2016 & 2017) · cloudless.eox.at · CC BY 4.0.", color = Muted, fontSize = 24.sp)
             Text(message, color = Ink, fontSize = 26.sp)
+            Text("Precise Wi-Fi fix can help when approximate location is throttled. Fresh fixes only.", color = Muted, fontSize = 24.sp)
             Text("Real-time: one turn in about 23h 56m. Your view slowly drifts over the surface; Above me recenters it.", color = Muted, fontSize = 24.sp)
-            Text("Location is read only while this app is open. Coordinates stay in memory unless you save a viewing preset. Live weather sends the viewed region to Open-Meteo when enabled.", color = Muted, fontSize = 24.sp)
+            Text("Mountain shading: Mapzen terrain (AWS Open Data). Viewed regions go to EOX and AWS and are cached locally. Live weather uses Open-Meteo.", color = Muted, fontSize = 24.sp)
         }
     }
 }
@@ -559,7 +573,7 @@ private fun EarthSettingsMenu(model: TheatreModel) {
 private fun ViewingPresetsMenu(model: TheatreModel) {
     val presets by model.viewingPresets.collectAsState()
     val message by model.presetMessage.collectAsState()
-    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+    Column(Modifier.fillMaxSize().horizonPanel()) {
         Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * PresetControls.HEADER).dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("Viewing presets", color = Ink, fontSize = 36.sp)
@@ -653,7 +667,8 @@ private fun ScenePickerMenu(model: TheatreModel) {
 @Composable
 private fun WeatherMenu(model: TheatreModel) {
     val weather by model.weatherUi.collectAsState()
-    Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
+    val clear by model.clearEarth.collectAsState()
+    Column(Modifier.fillMaxSize().horizonPanel()) {
         Column(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.HEADER).dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("Earth weather", color = Ink, fontSize = 36.sp)
@@ -661,14 +676,18 @@ private fun WeatherMenu(model: TheatreModel) {
         }
         Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * WeatherControls.ROW).dp)) {
             WeatherControl.entries.forEach { control ->
-                val label = if (control == WeatherControl.TOGGLE) "Live weather: ${if (weather.enabled) "On" else "Off"}" else control.label
-                ZoneButton(label, Modifier.fillMaxHeight().weight(1f), highlighted = control == WeatherControl.TOGGLE && weather.enabled) {
+                val label = when (control) {
+                    WeatherControl.TOGGLE -> "Live weather: ${if (weather.enabled) "On" else "Off"}"
+                    WeatherControl.CLEAR -> "Clear Earth: ${if (clear) "On" else "Off"}"
+                    else -> control.label
+                }
+                ZoneButton(label, Modifier.fillMaxHeight().weight(1f), highlighted = control == WeatherControl.TOGGLE && weather.enabled || control == WeatherControl.CLEAR && clear) {
                     model.weatherControl(control)
                 }
             }
         }
         Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text(weather.message, color = if (weather.stale) Accent else Ink, fontSize = 30.sp)
+            Text(if (clear) "Clear Earth · clouds and cloud shadows hidden" else weather.message, color = if (weather.stale) Accent else Ink, fontSize = 30.sp)
             weather.place?.let { Text(it.label(), color = Ink, fontSize = 28.sp) }
             weather.reading?.let { reading ->
                 Text("${reading.pattern.title} · ${reading.cloudCover}% cloud · ${kotlin.math.round(reading.temperature).toInt()}°C", color = Ink, fontSize = 28.sp)

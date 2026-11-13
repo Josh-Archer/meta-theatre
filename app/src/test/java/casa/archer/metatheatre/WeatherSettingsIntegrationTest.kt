@@ -37,9 +37,9 @@ class WeatherSettingsIntegrationTest {
     private lateinit var model:TheatreModel
     @Before fun setup(){
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        TheatreState(RuntimeEnvironment.getApplication()).saveLiveWeatherEnabled(false)
+        TheatreState(RuntimeEnvironment.getApplication()).saveLiveWeatherEnabled(false);TheatreState(RuntimeEnvironment.getApplication()).saveClearEarth(false)
     }
-    @After fun release(){model.release();TheatreState(RuntimeEnvironment.getApplication()).saveLiveWeatherEnabled(false);Dispatchers.resetMain()}
+    @After fun release(){model.release();TheatreState(RuntimeEnvironment.getApplication()).saveLiveWeatherEnabled(false);TheatreState(RuntimeEnvironment.getApplication()).saveClearEarth(false);Dispatchers.resetMain()}
     private fun ray(label:String){
         val rect=compose.onNodeWithText(label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val root=compose.onRoot().fetchSemanticsNode().boundsInRoot
@@ -50,7 +50,8 @@ class WeatherSettingsIntegrationTest {
         `when`(player.transport).thenReturn(MutableStateFlow(Transport(title="Movie")))
         model=TheatreModel(RuntimeEnvironment.getApplication(),player,mock(PlexClient::class.java),Dispatchers.Unconfined)
         model.libraryOpen.value=false
-        val toggles=mutableListOf<Boolean>();var refreshes=0;var earthMoves=0
+        val toggles=mutableListOf<Boolean>();val clearToggles=mutableListOf<Boolean>();var refreshes=0;var earthMoves=0
+        model.onClearEarth=clearToggles::add
         model.onWeatherEnabled={toggles.add(it)};model.onWeatherRefresh={refreshes++};model.onEarthControl={earthMoves++}
         model.openEarthControls()
         compose.setContent{Box(Modifier.requiredSize(1600.dp,900.dp)){LibraryPanel(model,player)}}
@@ -59,6 +60,15 @@ class WeatherSettingsIntegrationTest {
         compose.onNodeWithText("Live weather: Off").assertIsDisplayed()
         ray("Live weather: Off")
         compose.runOnIdle{assertTrue(TheatreState(RuntimeEnvironment.getApplication()).liveWeatherEnabled);assertEquals(listOf(true),toggles)}
+        ray("Clear Earth: Off")
+        compose.runOnIdle {
+            assertTrue(TheatreState(RuntimeEnvironment.getApplication()).clearEarth)
+            assertEquals(listOf(true), clearToggles)
+            assertTrue(TheatreState(RuntimeEnvironment.getApplication()).liveWeatherEnabled)
+        }
+        compose.onNodeWithText("Clear Earth · clouds and cloud shadows hidden").assertIsDisplayed()
+        ray("Clear Earth: On")
+        compose.runOnIdle { assertFalse(TheatreState(RuntimeEnvironment.getApplication()).clearEarth) }
         ray("Refresh")
         compose.runOnIdle{
             assertEquals(1,refreshes)

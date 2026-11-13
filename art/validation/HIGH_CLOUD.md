@@ -38,6 +38,8 @@ file changed.
 
 ## Headset
 
-Not run for this change. No Quest capture, stereo view, or frame-time sample
-was taken. The desktop map comparisons and unit tests do not show how the
-filaments read in the headset, at the limb, or over a dark ocean at night.
+The isolated implementation was not run on Quest. The subsequent combined
+build uploaded an 8K high-cloud fixture and passed native lifecycle checks;
+see [combined validation](REMAINING_ASSETS_20261112.md). Wearer review is deferred.
+Automated checks do not establish how the filaments read in stereo, at the
+limb, or over a dark ocean at night.

@@ -11,6 +11,8 @@ import org.json.JSONObject
 /** Device-local settings and bookmarks. Credentials and playback/poster URLs are never stored here. */
 internal class TheatreState(context: Context) {
     private val prefs = context.getSharedPreferences("theatre_state", Context.MODE_PRIVATE)
+    val clearEarth: Boolean get() = prefs.getBoolean("clear_earth", false)
+    fun saveClearEarth(value: Boolean) { prefs.edit { putBoolean("clear_earth", value) } }
     val liveWeatherEnabled: Boolean
         get() = prefs.getBoolean("live_weather_enabled", false)
     fun saveLiveWeatherEnabled(enabled: Boolean) { prefs.edit { putBoolean("live_weather_enabled", enabled) } }

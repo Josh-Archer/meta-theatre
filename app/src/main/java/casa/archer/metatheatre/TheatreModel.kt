@@ -138,14 +138,20 @@ class TheatreModel(
     var onLocationChanged: ((TheatreLocation) -> Unit)? = null
     var onResetSceneSettings: ((TheatreLocation) -> Unit)? = null
     internal val weatherUi = MutableStateFlow(WeatherUi(enabled = state.liveWeatherEnabled))
+    val clearEarth = MutableStateFlow(state.clearEarth)
+    internal var onClearEarth: ((Boolean) -> Unit)? = null
+    val earthDetailMessage = MutableStateFlow("Zoom in for detailed imagery")
     val weatherSettingsOpen = MutableStateFlow(false)
     val earthSettingsOpen = MutableStateFlow(false)
     val useCurrentLocation = MutableStateFlow(state.useCurrentLocation)
     val realEarthRotation = MutableStateFlow(state.realEarthRotationEnabled)
     val earthZoom = MutableStateFlow(1f)
+    val earthZoomMessage = MutableStateFlow("")
     val locationMessage = MutableStateFlow(if (state.useCurrentLocation) "Waiting for headset location." else "Current location is off.")
     internal var onLocationEnabled: ((Boolean) -> Unit)? = null
     internal var onLocationRequest: (() -> Unit)? = null
+    internal var onLocationSettings: (() -> Unit)? = null
+    internal var onPreciseLocation: (() -> Unit)? = null
     internal var onRealRotation: ((Boolean) -> Unit)? = null
     internal var onEarthZoom: ((EarthSetting) -> Unit)? = null
     internal val viewingPresets = MutableStateFlow(state.viewingPresets())
@@ -205,6 +211,7 @@ class TheatreModel(
         onEarthControl = null
         onLocationChanged = null
         onResetSceneSettings = null
+        onClearEarth = null
         onWeatherEnabled = null
         onWeatherRefresh = null
         onScreenResize = null
@@ -216,6 +223,8 @@ class TheatreModel(
         onResetView = null
         onLocationEnabled = null
         onLocationRequest = null
+        onLocationSettings = null
+        onPreciseLocation = null
         onRealRotation = null
         onEarthZoom = null
     }
@@ -696,6 +705,12 @@ class TheatreModel(
 
     internal fun weatherControl(control: WeatherControl) {
         when (control) {
+            WeatherControl.CLEAR -> {
+                val clear = !clearEarth.value
+                state.saveClearEarth(clear)
+                clearEarth.value = clear
+                onClearEarth?.invoke(clear)
+            }
             WeatherControl.DONE -> weatherSettingsOpen.value = false
             WeatherControl.REFRESH -> onWeatherRefresh?.invoke()
             WeatherControl.TOGGLE -> {
@@ -758,6 +773,8 @@ class TheatreModel(
                 state.saveRealEarthRotation(enabled)
                 onRealRotation?.invoke(enabled)
             }
+            EarthSetting.LOCATION_SETTINGS -> onLocationSettings?.invoke()
+            EarthSetting.PRECISE_LOCATION -> onPreciseLocation?.invoke()
             EarthSetting.DONE -> earthSettingsOpen.value = false
             else -> onEarthZoom?.invoke(setting)
         }

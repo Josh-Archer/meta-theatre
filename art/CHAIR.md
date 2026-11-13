@@ -1,5 +1,7 @@
 # Lounge chair — October 5, 2026
 
+Current runtime update: see [the November 11 material and performance pass](validation/REALISM_PERFORMANCE_20261111.md) for the refined materials, versioned Blender source, current asset costs, matched renders, and validation limits. The original authoring record below is preserved.
+
 The runtime chair was rebuilt in the live Blender MCP session as a saddle-leather
 lounge chair with walnut seat/back shells, padded arm caps, graphite metal sled
 rails, rubber feet, and champagne-metal mounting hardware. Upholstery has shaped

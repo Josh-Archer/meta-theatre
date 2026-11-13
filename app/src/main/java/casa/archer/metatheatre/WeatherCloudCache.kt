@@ -2,6 +2,10 @@ package casa.archer.metatheatre
 
 import android.content.ComponentCallbacks2
 import android.graphics.Bitmap
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Reloadable 8K cloud morphology. Explicit disable and memory pressure drop the
@@ -13,6 +17,7 @@ import android.graphics.Bitmap
  */
 internal class WeatherCloudCache(private val loader: () -> WeatherCloudMap) {
     private val lock = Any()
+    private val builds = Mutex()
     private var map: WeatherCloudMap? = null
     private var epoch = 0
     private var reloadAllowed = true
@@ -23,21 +28,24 @@ internal class WeatherCloudCache(private val loader: () -> WeatherCloudMap) {
     val acceptsReload: Boolean get() = synchronized(lock) { reloadAllowed }
     val loadCount: Int get() = synchronized(lock) { loads }
 
-    suspend fun build(snapshot: WeatherSnapshot): Bitmap? {
+    suspend fun build(snapshot: WeatherSnapshot): Bitmap? = builds.withLock {
         var existing: WeatherCloudMap? = null
         var ticket = 0
         synchronized(lock) {
             existing = map
-            if (existing == null && !reloadAllowed) return null
+            if (!reloadAllowed) return null
             ticket = epoch
         }
         val resolved = existing ?: loader().also { loaded ->
+            currentCoroutineContext().ensureActive()
             synchronized(lock) {
                 loads += 1
                 if (epoch == ticket && reloadAllowed) map = loaded
             }
         }
-        return resolved.build(snapshot)
+        currentCoroutineContext().ensureActive()
+        if (!acceptsReload) return null
+        resolved.build(snapshot)
     }
 
     /** User turned live weather off. The next atlas decode waits for [allowReload]. */

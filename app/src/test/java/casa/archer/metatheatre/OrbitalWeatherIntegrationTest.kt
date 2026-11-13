@@ -29,6 +29,22 @@ class OrbitalWeatherIntegrationTest {
                 .put("temperature_2m",12).put("wind_direction_10m",180))) }
     }.toString()
 
+    @Test fun refreshedTimestampsReuseCloudAppearanceButWeatherAndGeographyInvalidateIt() {
+        val first = snapshot(home)
+        val later = first.copy(readings = first.readings.map { it.copy(time = epoch.plusSeconds(900)) })
+        assertEquals(first.appearance(), later.appearance())
+        val central = first.central
+        for (changed in listOf(
+            central.copy(place = WeatherPlace(10.0, 20.0)),
+            central.copy(code = 95), central.copy(cloudCover = 70),
+            central.copy(windDirection = 90.0), central.copy(cloudCoverHigh = 90),
+            central.copy(cloudCoverMid = 25), central.copy(cloudCoverLow = 10),
+        )) {
+            val readings = first.readings.toMutableList().apply { set(size / 2, changed) }
+            assertNotEquals(first.appearance(), first.copy(readings = readings).appearance())
+        }
+    }
+
     @Test fun nativeMeridianManualSpinAndPolarExplorationAgreeWithTheSampledLocation() {
         val earth = EarthExploration()
         val viewer=Pose(EarthRenderer.SEAT_EYE)
@@ -36,7 +52,7 @@ class OrbitalWeatherIntegrationTest {
         assertEquals(0.0,place.latitude,.001);assertEquals(-100.0,place.longitude,.001)
         earth.spinBy(30f)
         place=WeatherPlace.viewed(earth.earthPose(),viewer.t)
-        assertEquals(-130.0,place.longitude,.001)
+        assertEquals(-70.0,place.longitude,.001)
         earth.apply(EarthControl.HOME,viewer)
         for (control in listOf(EarthControl.NORTH_POLE,EarthControl.SOUTH_POLE,EarthControl.FAR_SIDE)) {
             earth.apply(control,viewer)

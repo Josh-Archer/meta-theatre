@@ -1,6 +1,9 @@
 package casa.archer.metatheatre
 
 import android.content.ComponentCallbacks2
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -109,8 +112,7 @@ class WeatherCloudCacheTest {
             disabled.releaseForDisable()
             shared
         }
-        val built = checkNotNull(disabled.build(snapshot))
-        built.recycle()
+        assertNull(disabled.build(snapshot))
         assertFalse(disabled.retainsSources)
         assertEquals(0, disabled.retainedBytes)
         assertFalse(disabled.acceptsReload)
@@ -129,6 +131,22 @@ class WeatherCloudCacheTest {
         assertEquals(0, pressed.retainedBytes)
         assertTrue("Memory pressure must still allow the next live rebuild", pressed.acceptsReload)
         assertEquals(1, pressed.loadCount)
+    }
+
+    @Test fun cancellationDuringDecodeDoesNotRetainSourcesOrBuildAnOutput() = runTest {
+        val shared = WeatherCloudMap.load(RuntimeEnvironment.getApplication().assets)
+        lateinit var job: Job
+        val cache = WeatherCloudCache { job.cancel(); shared }
+        var returned = false
+        job = launch(start = CoroutineStart.LAZY) {
+            cache.build(snapshot)?.recycle()
+            returned = true
+        }
+        job.start()
+        job.join()
+        assertTrue(job.isCancelled)
+        assertFalse(returned)
+        assertFalse(cache.retainsSources)
     }
 
     private fun checksum(bitmap: android.graphics.Bitmap): Long {

@@ -3,6 +3,9 @@
 layout(std140, set = 3, binding = 0) uniform EarthUniform {
     vec4 sunPosition;
     vec4 cloudStyle;
+    vec4 cloudVisibility;
+    vec4 detailRegion;
+    vec4 terrainRegion;
 } earthUniform;
 
 layout(location = 0) in EarthVertex {
@@ -60,4 +63,16 @@ vec2 cloudSunOffset(vec3 sun, mat3 frame, float elevation) {
 // The original map remains an alpha-only source, with a middle-altitude deck.
 vec3 cloudProfile(vec4 sampleValue) {
     return mix(vec3(0.5, 0.0, 0.0), decodeData(sampleValue.rgb), earthUniform.cloudStyle.x);
+}
+
+// Uniform across the draw: clear-Earth mode needs no cloud samples or attenuation.
+// x attenuates sunlight; y attenuates city lights through the overhead cloud deck.
+vec2 surfaceCloudTransmission(sampler2D map, vec3 sun, mat3 frame, float elevation) {
+    if (earthUniform.cloudVisibility.x == 0.0) return vec2(1.0);
+    vec4 cloud = texture(map, earth.uv);
+    vec2 offset = cloudSunOffset(sun, frame, elevation) * (0.4 + cloudProfile(cloud).x);
+    float density = texture(map, earth.uv + offset).a * earthUniform.cloudVisibility.x;
+    float softDensity = texture(map, earth.uv + offset * 0.7).a * earthUniform.cloudVisibility.x;
+    return vec2(exp(-(density + softDensity) * 0.7),
+        exp(-cloud.a * 1.3 * earthUniform.cloudVisibility.x));
 }

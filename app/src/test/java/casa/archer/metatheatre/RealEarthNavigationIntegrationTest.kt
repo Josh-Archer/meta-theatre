@@ -44,7 +44,7 @@ class RealEarthNavigationIntegrationTest {
         repeat(25) {
             earth.zoomBy(1.12f,turnedHead)
             assertEquals(sky,earth.skyFrame)
-            assertTrue((earth.earthPose().t-viewer.t).length()>=EarthRenderer.RADIUS*1.012f+11.99f)
+            assertTrue((earth.earthPose().t-viewer.t).length()>=EarthRenderer.RADIUS*1.012f+EarthExploration.NEAR_CLEARANCE-.01f)
             assertTrue(startDirection.dot((earth.earthPose().t-viewer.t).normalize())>.9999f)
             val inverse = sky.inverse()
             val center = inverse*earth.earthPose().t
@@ -75,7 +75,7 @@ class RealEarthNavigationIntegrationTest {
         earth.setRealRotation(true)
         earth.viewLocation(WeatherPlace(0.0,0.0),viewer)
         now = epoch.plusSeconds(3600)
-        assertEquals((3600/RealEarthTime.SIDEREAL_SECONDS*360).toFloat(),earth.spinAt(),.0001f)
+        assertEquals(-(3600/RealEarthTime.SIDEREAL_SECONDS*360).toFloat(),earth.spinAt(),.0001f)
         val place = WeatherPlace.viewed(earth.earthPose(),viewer.t)
         assertEquals(-15.041,place.longitude,.003)
         earth.setRealRotation(false)
@@ -84,7 +84,7 @@ class RealEarthNavigationIntegrationTest {
         assertEquals(frozen,earth.spinAt(),0f)
         earth.setRealRotation(true)
         now = now.plusSeconds(3600)
-        assertEquals(frozen+15.041f,earth.spinAt(),.001f)
+        assertEquals(frozen-15.041f,earth.spinAt(),.001f)
         assertEquals(0f,RealEarthTime.rotationSince(epoch,epoch.plusNanos((RealEarthTime.SIDEREAL_SECONDS*1e9).toLong())),.0001f)
     }
 
@@ -99,7 +99,8 @@ class RealEarthNavigationIntegrationTest {
             val p=step/100.0
             val car=SpaceVisitors.pose(SpaceVisitors.roadster,p)
             val carRadius=SpaceVisitors.radius(SpaceVisitors.roadster)*SpaceVisitors.roadster.displayScale
-            assertTrue((car.t-globe).length()>EarthRenderer.RADIUS*1.012f+carRadius)
+            val safeCar=EarthClearance.position(car.t,carRadius,globe,eye)
+            assertTrue((safeCar-globe).length()>EarthRenderer.RADIUS*1.012f+carRadius)
             val iss=SpaceVisitors.pose(SpaceVisitors.iss,p)
             val radius=SpaceVisitors.radius(SpaceVisitors.iss)*SpaceVisitors.iss.displayScale
             val center=EarthClearance.position(iss.t,radius,globe,eye)
@@ -108,6 +109,30 @@ class RealEarthNavigationIntegrationTest {
                 asin((radius/(center-eye).length()).toDouble())
             assertTrue(separation>bound-.00001)
         }
+    }
+
+    @Test fun surfaceZoomReachesCloseOrbitInUsefulStepsAndProtectsMovedScreensAndReturnFlights() {
+        val earth=EarthExploration {epoch}
+        earth.viewLocation(WeatherPlace(35.0,140.0),viewer)
+        val original=WeatherPlace.viewed(earth.earthPose(),viewer.t)
+        earth.zoomDetailBy(1.5f,viewer)
+        assertEquals(1.5f,earth.detailZoom,.001f)
+        repeat(10){earth.zoomDetailBy(1.5f,viewer)}
+        assertTrue("Close orbit must provide much more surface magnification",earth.detailZoom>8f)
+        assertTrue(original.distance(WeatherPlace.viewed(earth.earthPose(),viewer.t))<.05)
+        assertTrue(earth.ensureClearance(viewer,15f))
+        assertTrue((earth.earthPose().t-viewer.t).length()>=EarthRenderer.RADIUS*1.012f+14.99f)
+        assertFalse(earth.ensureClearance(viewer,15f))
+        val globe=earth.earthPose().t
+        for(visitor in SpaceVisitors.all){
+            val bound=SpaceVisitors.radius(visitor)*visitor.displayScale
+            for(step in 0..50){
+                val point=viewer.t+(globe-viewer.t).normalize()*step.toFloat()
+                val safe=EarthClearance.outside(point,bound,globe)
+                assertTrue((safe-globe).length()>=EarthRenderer.RADIUS*EarthExploration.SOLID_RADIUS+bound+.49f)
+            }
+        }
+        earth.resetZoom(viewer);assertEquals(1f,earth.detailZoom,.001f)
     }
 
     @Test fun seasonalUtcSunLightsTheActualGeographyAndIsIndependentOfHeadsetTimezoneAndManualSpin() {
@@ -143,4 +168,26 @@ class RealEarthNavigationIntegrationTest {
         assertEquals(1f,ViewingPreset.parse(legacy)!!.zoom,0f)
         assertNull(ViewingPreset.parse(preset.json().put("zoom",100)))
     }
+    @Test fun mountainZoomProvidesMuchCloserGeographicDetailWithPhysicalHeadAndScreenClearance() {
+        val earth=EarthExploration()
+        val eye=Pose(EarthRenderer.SEAT_EYE.copy())
+        val place=WeatherPlace(45.83,6.86)
+        earth.viewLocation(place,eye)
+        earth.zoomDetailBy(1000f,eye,15f)
+        assertTrue(earth.detailZoom>100f)
+        assertTrue(earth.renderScale>1f)
+        assertTrue((earth.earthPose().t-eye.t).length()>=earth.renderRadius*EarthExploration.SOLID_RADIUS+14.99f)
+        assertTrue(place.distance(WeatherPlace.viewed(earth.earthPose(),eye.t))<.05)
+        val pointer=VisitorPointer(1L,Pose(eye.t,com.meta.spatial.core.Quaternion.fromDirection(earth.earthPose().t-eye.t)),false,100f)
+        val target=VisitorTarget("earth",earth.earthPose(),earth.renderScale,EarthRenderer.RADIUS*EarthExploration.SOLID_RADIUS)
+        assertNotNull(ScenePointer.hit(pointer,target))
+        assertTrue(earth.distance / earth.renderScale - EarthRenderer.RADIUS < .6f)
+        val inspection=eye.t+(earth.earthPose().t-eye.t).normalize()*2f
+        val guarded=EarthClearance.outside(inspection,.6f,earth.earthPose().t,earth.renderRadius)
+        assertTrue("Close inspection must remain near the viewer outside the cloud deck",(inspection-guarded).length()<.001f)
+        earth.resetZoom(eye,15f)
+        assertEquals(1f,earth.renderScale,0f)
+        assertEquals(1f,earth.detailZoom,.001f)
+    }
+
 }

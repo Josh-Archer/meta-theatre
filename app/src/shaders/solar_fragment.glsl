@@ -2,6 +2,7 @@
 layout(std140, set = 3, binding = 0) uniform SolarUniform {
     vec4 sunPosition; // Shared Sun in GraphicsHSR shader world coordinates.
     vec4 parameters; // Emission, Saturn flag, ring inner radius, ring outer radius.
+    vec4 surfaceParameters; // Regolith blend, Minnaert exponent, normal strength, cloud haze.
 } solarUniform;
 layout(location = 0) in SolarVertex {
     vec2 uv;

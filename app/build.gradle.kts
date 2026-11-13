@@ -69,6 +69,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)
@@ -85,6 +86,7 @@ dependencies {
 
     implementation(libs.meta.spatial.sdk)
     implementation(libs.meta.spatial.sdk.compose)
+    implementation("com.meta.spatial:meta-spatial-sdk-uiset:0.14.0")
     implementation(libs.meta.spatial.sdk.toolkit)
     implementation(libs.meta.spatial.sdk.vr)
     implementation(libs.meta.spatial.sdk.isdk)

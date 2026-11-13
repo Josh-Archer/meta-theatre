@@ -17,8 +17,8 @@ class EarthLightingTest {
         assertEquals(1f, noon.z, 1e-6f)
         assertEquals(0f, noon.x, 1e-6f)
         assertEquals(-1f, EarthLighting.sunAt(at(0), zone).z, 1e-6f)
-        assertEquals(1f, EarthLighting.sunAt(at(6), zone).x, 1e-6f)
-        assertEquals(-1f, EarthLighting.sunAt(at(18), zone).x, 1e-6f)
+        assertEquals(-1f, EarthLighting.sunAt(at(6), zone).x, 1e-6f)
+        assertEquals(1f, EarthLighting.sunAt(at(18), zone).x, 1e-6f)
         assertEquals(0.5, EarthLighting.dayWeight(EarthLighting.sunAt(at(6), zone).z.toDouble()), 1e-6)
     }
 

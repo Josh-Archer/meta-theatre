@@ -147,17 +147,12 @@ internal class ScreenGripSystem(
         Visible(false),
     )
 
-    private fun opaqueBacking() = Entity.create(
-        Mesh("mesh://quad".toUri(), hittable = MeshCollision.NoCollision),
-        Quad(min = Vector2(-.5f,-.5f), max = Vector2(.5f,.5f)),
-        Material().apply {
-            baseColor = Color4(.006f,.008f,.012f,1f)
-            unlit = true
-            alphaMode = AlphaMode.OPAQUE.mode
-        }, Transform(Pose()), Visible(false),
+    private fun opaqueBacking(name: String) = Entity.create(
+        Mesh("mesh://horizon_$name".toUri(), hittable = MeshCollision.NoCollision),
+        Transform(Pose()), Visible(false),
     )
-    private val libraryBacking = opaqueBacking()
-    private val playerBacking = opaqueBacking()
+    private val libraryBacking = opaqueBacking("library")
+    private val playerBacking = opaqueBacking("player")
     private var lastLibraryBacking: PanelBackingState? = null
     private var lastPlayerBacking: PanelBackingState? = null
     private fun applyBacking(entity: Entity, state: PanelBackingState) {
