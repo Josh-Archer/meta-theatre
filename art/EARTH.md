@@ -165,8 +165,9 @@ renders, shader compilation and JVM tests do not establish those results.
 ## Preserved static variants and Unreal sandbox
 
 The earlier `blender/earth.blend`, source versions, `exports/earth/`,
-`renders/earth/`, and `earth_{day,twilight,night}.glb` assets remain available.
-They contain baked lighting states and are no longer selected by the app.
+`renders/earth/`, and `earth_{day,twilight,night}.glb` assets remain under `art/`.
+They contain baked lighting states, are no longer selected by the app, and are
+not packaged into the APK.
 `validation/earth_gltf_report.json` records their earlier validation.
 
 The existing Unreal asset sandbox retains the earlier native static assets under

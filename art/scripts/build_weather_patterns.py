@@ -1,7 +1,7 @@
 """Author orbital cloud patterns in the live Blender MCP scene; preserve editable volumes.
 
-Execute with __file__ set to this project script. Runtime uses the baked density
-atlas on the existing full-resolution cloud shell; Unreal retains the 3D sources.
+Execute with __file__ set to this project script. The density atlas stays in
+art/textures for Unreal and reference. The native app does not package it.
 """
 import bpy, math, json
 import numpy as np
@@ -101,10 +101,9 @@ for index,name in enumerate(names):
     label=bpy.data.objects.new('Label | '+name,data);scene.collection.objects.link(label);label.location=(obj.location.x,obj.location.y-1.30,.02)
 image=bpy.data.images.new('Weather | authored density atlas',width=N*4,height=N*2,alpha=True)
 image.pixels.foreach_set(np.flipud(atlas).ravel());image.filepath_raw=str(TEX);image.file_format='PNG';image.save()
-# Editable source retains a relative authored texture path.
+# Editable source retains a relative authored texture path. Do not copy the atlas
+# into app/src/main/assets; the native renderer uses cloud_structure.png.
 image.filepath='//../textures/weather/cloud_patterns.png'
-import shutil
-shutil.copyfile(TEX,ROOT/'app/src/main/assets/weather/cloud_patterns.png')
 # FBX staging uses the seven neutral model meshes, not preview captions or lights.
 for o in scene.objects:o.select_set(False)
 exports.hide_viewport=False

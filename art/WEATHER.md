@@ -56,11 +56,11 @@ Unreal reference assets; the app no longer stamps that atlas onto Earth.
   `WEATHER_ROOT` set locally. Imports seven meshes and the atlas into
   `/Game/MetaTheatre/Weather`, then creates a translucent master material and
   eight tile-specific instances. It refuses to replace an existing folder.
-  The open level is preserved. Unreal packages stay in the asset sandbox;
-  Android consumes the shared atlas through its native renderer.
+  The open level is preserved. Unreal packages stay in the asset sandbox.
+  Android does not package this atlas.
 - `renders/weather/cloud_library.png`: Blender authoring preview, not a headset
-  capture. Solid model surfaces show pattern structure; the runtime uses soft
-  density from the atlas.
+  capture. Solid model surfaces show pattern structure. The native renderer
+  does not use this atlas; live clouds use `cloud_structure.png`.
 
 The app generates a cloud map at the original offline map's full resolution on a
 background dispatcher. Spherical blending handles poles and the texture seam;
@@ -70,7 +70,8 @@ the active weather. Surface/city maps use native 8K detail; normal, ocean and cl
 maps are 4K. Atmosphere, geometry and shared day/night timing remain intact. Earth remains three draws; weather adds no cloud mesh draws.
 
 Run `scripts/validate_weather_assets.cjs` with `gltf-validator` available on the
-Node module path to check the exported GLBs and atlas packaging.
+Node module path to check the exported GLBs and the art-only density atlas.
+That atlas is not an app asset.
 
 See [verification results](validation/ORBITAL_WEATHER.md) for automated checks,
 headset evidence and the remaining visual checks.
