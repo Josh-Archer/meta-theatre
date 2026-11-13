@@ -37,6 +37,7 @@ import com.meta.spatial.toolkit.PanelRenderMode
 import com.meta.spatial.toolkit.PanelStyleOptions
 import com.meta.spatial.toolkit.PixelDisplayOptions
 import com.meta.spatial.toolkit.QuadShapeOptions
+import com.meta.spatial.toolkit.Scale
 import com.meta.spatial.toolkit.Transform
 import com.meta.spatial.toolkit.UIPanelRenderOptions
 import com.meta.spatial.toolkit.Visible
@@ -276,6 +277,8 @@ class TheatreActivity : AppSystemActivity() {
         // Grip-to-move is ScreenGripSystem. The video panel waits until playback.
         val panel = Entity.create(
             Panel(R.id.library_panel, MeshCollision.LineTest),
+            // Unit scale so ScreenGrip reads this component instead of the missing-component fallback.
+            Scale(libraryPanelUnitScale()),
             Transform(initialSettings.screenPose),
             IsdkPanelDimensions(Vector2(initialSettings.screenSize.width, initialSettings.screenSize.height)),
             IsdkPanelResize(

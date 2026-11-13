@@ -43,6 +43,17 @@ class ScreenOverlays(
     val subtitles: Entity? = null,
 )
 
+/** Unit scale attached to the library panel. A missing Scale component resolves to the same value. */
+internal fun libraryPanelUnitScale(): Vector3 = Vector3(1f, 1f, 1f)
+
+/**
+ * Scale used for panel size, hide/show, and overlay alignment.
+ * An in-progress presentation wins, then the entity's Scale component.
+ * A missing component is [libraryPanelUnitScale], matching the panel created in TheatreActivity.
+ */
+internal fun resolveLogicalScale(presentation: Vector3?, component: Vector3?): Vector3 =
+    presentation ?: component ?: libraryPanelUnitScale()
+
 internal class ScreenGripSystem(
     private val screen: Entity,
     private val onPress: (xNorm: Float, yNorm: Float) -> Unit,
@@ -619,7 +630,10 @@ internal class ScreenGripSystem(
         onScreenHiddenChange(false)
     }
 
-    private fun logicalScale(): Vector3 = presentationScale ?: runCatching { screen.getComponent<Scale>().scale }.getOrNull() ?: Vector3(1f, 1f, 1f)
+    private fun logicalScale(): Vector3 = resolveLogicalScale(
+        presentationScale,
+        runCatching { screen.getComponent<Scale>().scale }.getOrNull(),
+    )
 
     private fun advancePresentation(now: Long) {
         val scale = presentationScale ?: return
