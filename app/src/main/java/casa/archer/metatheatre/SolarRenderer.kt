@@ -42,10 +42,12 @@ class SolarRenderer(private val activity: TheatreActivity) {
     private var worldFrame = Pose()
     private val fixedBodies = mutableListOf<Pair<SolarSystem.Body, Entity>>()
     private var starsEntity: Entity? = null
+    private var earthRadius = EarthRenderer.RADIUS
     private var earthViewCenter = EarthRenderer.CENTER
     private var earthViewer = EarthRenderer.SEAT_EYE
-    private fun displayBody(body: SolarSystem.Body) = EarthClearance.body(body, earthViewCenter, earthViewer)
-    fun setEarthView(earth: Vector3, viewer: Vector3) {
+    private fun displayBody(body: SolarSystem.Body) = EarthClearance.body(body, earthViewCenter, earthViewer, earthRadius)
+    fun setEarthView(earth: Vector3, viewer: Vector3, radius: Float = EarthRenderer.RADIUS) {
+        earthRadius = radius
         earthViewCenter = worldFrame.inverse() * earth
         earthViewer = worldFrame.inverse() * viewer
         fixedBodies.forEach { (body, entity) ->
@@ -76,6 +78,7 @@ class SolarRenderer(private val activity: TheatreActivity) {
             }
         }
         val ringTexture = texture("saturn_rings.png", radial = true)
+        val moonNormal = texture("moon_normal.png")
         val stars = material("solar_stars", listOf("colorMap")).apply {
             setTexture("colorMap", texture("stars.jpg"))
             setSortOrder(SortOrder.PREPROCESS)
@@ -86,10 +89,21 @@ class SolarRenderer(private val activity: TheatreActivity) {
         starsEntity = entity("stars", files.getValue("solar_stars"), stars, SolarSystem.STAR_RADIUS,
             Pose(Vector3(0f, 0f, 0f), worldFrame.q))
         for (body in SolarSystem.planets.filter { it.name != "earth" } + SolarSystem.moon) {
-            val material = material("solar_surface", listOf("colorMap", "ringMap")).apply {
+            val material = material("solar_surface", listOf("colorMap", "ringMap", "normalMap")).apply {
                 setTexture("colorMap", texture("${body.name}.jpg"))
                 setTexture("ringMap", ringTexture)
+                setTexture("normalMap", moonNormal)
                 setAttribute("parameters", Vector4(0f, if (body.name == "saturn") 1f else 0f, SolarSystem.RING_INNER, SolarSystem.RING_OUTER))
+                // Artistic, restrained surface profiles; sizes and Sun geometry remain physical.
+                setAttribute("surfaceParameters", when (body.name) {
+                    "moon" -> Vector4(0.65f, 1f, 1f, 0f)
+                    "mercury" -> Vector4(0.45f, 1f, 0f, 0f)
+                    "mars" -> Vector4(0.25f, 1f, 0f, 0.025f)
+                    "venus" -> Vector4(0f, 0.90f, 0f, 0.08f)
+                    "jupiter" -> Vector4(0f, 0.88f, 0f, 0.035f)
+                    "saturn" -> Vector4(0f, 0.90f, 0f, 0.055f)
+                    else -> Vector4(0f, 0.95f, 0f, 0.065f)
+                })
             }
             litMaterials.add(body to material)
             val placed = if (body.name == "moon") body else displayBody(body)
@@ -106,9 +120,10 @@ class SolarRenderer(private val activity: TheatreActivity) {
         litMaterials.add(saturn to rings)
         fixedBodies.add(saturn to entity("rings", files.getValue("solar_rings"), rings, saturn.radius,
             displayBody(saturn).let { worldFrame * Pose(it.center, it.rotation) }))
-        val sun = material("solar_surface", listOf("colorMap", "ringMap")).apply {
+        val sun = material("solar_surface", listOf("colorMap", "ringMap", "normalMap")).apply {
             setTexture("colorMap", texture("sun.jpg"))
             setTexture("ringMap", ringTexture)
+            setTexture("normalMap", moonNormal)
             setAttribute("parameters", Vector4(1f, 0f, 0f, 0f))
         }
         val corona = material("solar_corona", emptyList(), transparent = true).apply { setRenderOrder(30) }
@@ -137,12 +152,14 @@ class SolarRenderer(private val activity: TheatreActivity) {
         SceneMaterial.custom(shader, arrayOf(
             SceneMaterialAttribute("sunPosition", SceneMaterialDataType.Vector4),
             SceneMaterialAttribute("parameters", SceneMaterialDataType.Vector4),
+            SceneMaterialAttribute("surfaceParameters", SceneMaterialDataType.Vector4),
             *maps.map { SceneMaterialAttribute(it, SceneMaterialDataType.Texture2D) }.toTypedArray(),
         ), if (transparent) AlphaMode.TRANSLUCENT else AlphaMode.OPAQUE).apply {
             setDepthTest(DepthTest.LESS_OR_EQUAL)
             setDepthWrite(if (transparent) DepthWrite.DISABLE else DepthWrite.ENABLE)
             setAttribute("sunPosition", Vector4(0f, 0f, 1f, 0f))
             setAttribute("parameters", Vector4(0f, 0f, 0f, 0f))
+            setAttribute("surfaceParameters", Vector4(0f, 1f, 0f, 0f))
             if (transparent) {
                 setBlendMode(BlendMode.TRANSLUCENT)
                 setDepthWrite(DepthWrite.DISABLE)

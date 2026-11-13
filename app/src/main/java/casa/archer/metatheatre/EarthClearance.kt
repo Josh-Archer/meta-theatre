@@ -5,19 +5,28 @@ import kotlin.math.*
 
 /** Keep the distant planet exhibits outside Earth's growing silhouette when zooming in. */
 internal object EarthClearance {
-    fun body(body: SolarSystem.Body, earth: Vector3, viewer: Vector3): SolarSystem.Body {
-        val bound = body.radius * if (body.name == "saturn") SolarSystem.RING_OUTER else 1f
-        return body.copy(center = position(body.center, bound, earth, viewer))
+    /** Physical collision guard for inspection and return flights, which need not stay outside the silhouette. */
+    fun outside(center: Vector3, bound: Float, earth: Vector3, radius: Float = EarthRenderer.RADIUS): Vector3 {
+        val offset = center-earth
+        val minimum = radius*EarthExploration.SOLID_RADIUS + bound + .5f
+        if (offset.length() >= minimum) return center
+        val normal = if (offset.length() > .001f) offset.normalize() else Vector3(0f,1f,0f)
+        return earth + normal * minimum
     }
 
-    fun position(center: Vector3, bound: Float, earth: Vector3, viewer: Vector3): Vector3 {
+    fun body(body: SolarSystem.Body, earth: Vector3, viewer: Vector3, radius: Float = EarthRenderer.RADIUS): SolarSystem.Body {
+        val bound = body.radius * if (body.name == "saturn") SolarSystem.RING_OUTER else 1f
+        return body.copy(center = position(body.center, bound, earth, viewer, radius))
+    }
+
+    fun position(center: Vector3, bound: Float, earth: Vector3, viewer: Vector3, radius: Float = EarthRenderer.RADIUS): Vector3 {
         val globe = earth - viewer
         val offset = center - viewer
         val distance = offset.length()
-        if (globe.length() <= EarthRenderer.RADIUS * 1.012f || distance <= bound) return center
+        if (globe.length() <= radius * EarthExploration.SOLID_RADIUS || distance <= bound) return center
         val axis = globe.normalize()
         val direction = offset.normalize()
-        val limit = asin((EarthRenderer.RADIUS * 1.012f / globe.length()).toDouble()) +
+        val limit = asin((radius * EarthExploration.SOLID_RADIUS / globe.length()).toDouble()) +
             asin((bound / distance).toDouble().coerceIn(0.0,1.0))
         val dot = axis.dot(direction).toDouble().coerceIn(-1.0,1.0)
         if (acos(dot) >= limit) return center

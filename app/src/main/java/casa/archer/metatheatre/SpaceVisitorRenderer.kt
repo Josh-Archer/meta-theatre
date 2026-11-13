@@ -14,15 +14,22 @@ import com.meta.spatial.toolkit.Visible
 /** Embedded PBR GLBs inherit SolarRenderer's shared Sun; pointer targeting avoids mesh collisions. */
 internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elapsedRealtime) {
     private data class Entry(val visitor: SpaceVisitors.Visitor, val entity: Entity, var visible: Boolean = false,
-                             var phaseOffset: Double = 0.0, var returning: VisitorReturnFlight? = null)
+                             var phaseOffset: Double = 0.0, var returning: VisitorReturnFlight? = null,
+                             val placement: ScenePlacementCache = ScenePlacementCache(visitor.displayScale))
     private val entries = mutableListOf<Entry>()
     private val inspection = VisitorInspection()
     private val elapsedClock = PausableElapsedClock(clockMillis)
     private var worldFrame = Pose()
+    private var earthRadius = EarthRenderer.RADIUS
     private var earthCenter = EarthRenderer.CENTER
     private var earthViewer = EarthRenderer.SEAT_EYE
     private var zoomed = false
-    fun setEarthView(earth: Vector3, viewer: Vector3, zoom: Float) {
+    private fun place(entry: Entry, pose: Pose, scale: Float) {
+        if (entry.placement.updatePose(pose)) entry.entity.setComponent(Transform(pose))
+        if (entry.placement.updateScale(scale)) entry.entity.setComponent(Scale(Vector3(scale, scale, scale)))
+    }
+    fun setEarthView(earth: Vector3, viewer: Vector3, zoom: Float, radius: Float = EarthRenderer.RADIUS) {
+        earthRadius = radius
         earthCenter = worldFrame.inverse() * earth
         earthViewer = worldFrame.inverse() * viewer
         zoomed = zoom > 1.001f
@@ -30,10 +37,12 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
     }
     private fun pose(visitor: SpaceVisitors.Visitor, progress: Double): Pose {
         val original = SpaceVisitors.pose(visitor, progress)
-        val position = if (zoomed && visitor == SpaceVisitors.iss)
-            EarthClearance.position(original.t, radius(visitor)*visitor.displayScale, earthCenter, earthViewer) else original.t
+        val position = if (zoomed)
+            EarthClearance.position(original.t, radius(visitor)*visitor.displayScale, earthCenter, earthViewer, earthRadius) else original.t
         return worldFrame * Pose(position,original.q)
     }
+    private fun clearOfEarth(pose: Pose, bound: Float): Pose = if (!zoomed) pose else
+        Pose(worldFrame * EarthClearance.outside(worldFrame.inverse()*pose.t,bound,earthCenter,earthRadius), pose.q.copy())
     fun setWorldFrame(frame: Pose) {
         if (worldFrame == frame) return
         inspection.cancelGrab()
@@ -72,16 +81,12 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
                 val orbit = VisitorTarget(entry.visitor.asset, pose(entry.visitor, p ?: .5),
                     entry.visitor.displayScale, radius(entry.visitor))
                 val frame = flight.frame(orbit, now)
-                entry.entity.setComponent(Transform(frame.pose))
-                entry.entity.setComponent(Scale(Vector3(frame.scale, frame.scale, frame.scale)))
+                place(entry, clearOfEarth(frame.pose, frame.radius * frame.scale), frame.scale)
                 if (flight.finished(now)) entry.returning = null
             } else if (inspected != null) {
-                entry.entity.setComponent(Transform(inspected.pose))
-                entry.entity.setComponent(Scale(Vector3(inspected.scale, inspected.scale, inspected.scale)))
+                place(entry, clearOfEarth(inspected.pose, inspected.radius * inspected.scale), inspected.scale)
             } else if (p != null) {
-                entry.entity.setComponent(Transform(pose(entry.visitor, p)))
-                val scale = entry.visitor.displayScale
-                entry.entity.setComponent(Scale(Vector3(scale, scale, scale)))
+                place(entry, pose(entry.visitor, p), entry.visitor.displayScale)
             }
         }
     }

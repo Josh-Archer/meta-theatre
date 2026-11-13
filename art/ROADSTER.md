@@ -1,5 +1,7 @@
 # Modern Roadster and Starman — October 9, 2026
 
+Current runtime update: see [the November 11 material and performance pass](validation/REALISM_PERFORMANCE_20261111.md) for the refined materials, versioned Blender source, current asset costs, matched renders, and validation limits. The original authoring record below is preserved.
+
 The runtime Roadster now follows the modern red design in the user's supplied
 photograph. It was authored, inspected and rendered through the live Blender MCP
 session, then imported and reviewed in the existing Unreal asset lab. The low

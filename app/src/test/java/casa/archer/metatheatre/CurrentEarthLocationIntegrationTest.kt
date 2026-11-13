@@ -4,7 +4,10 @@ import android.Manifest
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.os.Looper
+import android.location.LocationRequest
+import android.os.CancellationSignal
+import java.util.concurrent.Executor
+import java.util.function.Consumer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.junit.Assert.*
@@ -49,8 +52,8 @@ class CurrentEarthLocationIntegrationTest {
 
     @Test fun timeoutsAndProviderErrorsAreVisibleWithoutLeakingRawLocationOrNetworkDiagnostics() = runTest {
         val messages=mutableListOf<String>()
-        val session=EarthLocationSession(backgroundScope,EarthLocationSource {delay(60_000);error("private coordinates")},messages::add,{fail("Must not move")})
-        session.setEnabled(true);session.setActive(true);advanceTimeBy(45_001);runCurrent()
+        val session=EarthLocationSession(backgroundScope,EarthLocationSource {delay(180_000);error("private coordinates")},messages::add,{fail("Must not move")})
+        session.setEnabled(true);session.setActive(true);advanceTimeBy(LOCATION_TIMEOUT_MS+1);runCurrent()
         assertTrue(messages.last().contains("timed out"))
         val failed=EarthLocationSession(backgroundScope,EarthLocationSource {error("private@example.invalid latitude=35")},messages::add,{fail("Must not move")})
         failed.setEnabled(true);failed.setActive(true);runCurrent()
@@ -69,7 +72,7 @@ class CurrentEarthLocationIntegrationTest {
         `when`(manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)).thenReturn(true)
         lateinit var listener:LocationListener
         doAnswer { call ->listener=call.getArgument(3);null }.`when`(manager)
-            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),eq(0L),eq(0f),any(LocationListener::class.java),any(Looper::class.java))
+            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),any(LocationRequest::class.java),any(Executor::class.java),any(LocationListener::class.java))
         val waiting=async {source.locate()};runCurrent()
         val canceledListener=listener
         waiting.cancel();runCurrent();verify(manager).removeUpdates(canceledListener)
@@ -89,13 +92,35 @@ class CurrentEarthLocationIntegrationTest {
         val stale=fix(android.os.SystemClock.elapsedRealtimeNanos()-1_200_000_000_000L)
         lateinit var listener:LocationListener
         doAnswer { listener=it.getArgument(3);null }.`when`(manager)
-            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),eq(0L),eq(0f),any(LocationListener::class.java),any(Looper::class.java))
+            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),any(LocationRequest::class.java),any(Executor::class.java),any(LocationListener::class.java))
         val waiting=async {AndroidEarthLocation(context,manager).locate()};runCurrent()
         listener.onLocationChanged(stale);assertFalse(waiting.isCompleted)
         listener.onLocationChanged(fix().apply{accuracy=Float.NaN});assertFalse(waiting.isCompleted)
         listener.onLocationChanged(fix());assertEquals(place,waiting.await().place)
         verify(manager).removeUpdates(listener)
         verify(manager,never()).getLastKnownLocation(anyString())
+    }
+
+    @Test fun explicitCurrentRequestUsesHighAccuracyAndAnOldCurrentCallbackCannotMasqueradeAsFresh() = runTest {
+        val context=RuntimeEnvironment.getApplication()
+        shadowOf(context).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        val manager=mock(LocationManager::class.java)
+        `when`(manager.isLocationEnabled).thenReturn(true)
+        `when`(manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)).thenReturn(true)
+        lateinit var callback: Consumer<Location?>
+        lateinit var signal: CancellationSignal
+        doAnswer {call ->
+            val request=call.getArgument<LocationRequest>(1)
+            assertEquals(LocationRequest.QUALITY_HIGH_ACCURACY,request.quality)
+            assertEquals(LOCATION_TIMEOUT_MS,request.durationMillis)
+            signal=call.getArgument(2);callback=call.getArgument(4);null
+        }.`when`(manager).getCurrentLocation(eq(LocationManager.NETWORK_PROVIDER),any(LocationRequest::class.java),
+            any(CancellationSignal::class.java),any(Executor::class.java),any())
+        val waiting=async {AndroidEarthLocation(context,manager).locate()};runCurrent()
+        callback.accept(fix(android.os.SystemClock.elapsedRealtimeNanos()-600_000_000_000L))
+        assertFalse(waiting.isCompleted)
+        callback.accept(fix());assertEquals(place,waiting.await().place)
+        assertTrue(signal.isCanceled)
     }
 
     @Test fun explicitRefreshWhileInactiveShowsFeedbackAndRunsWhenFocusReturns() = runTest {
@@ -127,13 +152,13 @@ class CurrentEarthLocationIntegrationTest {
         `when`(manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)).thenReturn(true)
         lateinit var listener:LocationListener
         doAnswer {listener=it.getArgument(3);null}.`when`(manager)
-            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),eq(0L),eq(0f),any(LocationListener::class.java),any(Looper::class.java))
+            .requestLocationUpdates(eq(LocationManager.NETWORK_PROVIDER),any(LocationRequest::class.java),any(Executor::class.java),any(LocationListener::class.java))
         val messages=mutableListOf<String>();val centers=mutableListOf<WeatherPlace>()
         val session=EarthLocationSession(backgroundScope,AndroidEarthLocation(context,manager),messages::add,centers::add)
         session.setEnabled(true);session.setActive(true);runCurrent()
         listener.onLocationChanged(fix(android.os.SystemClock.elapsedRealtimeNanos()-600_000_000_000L))
         assertTrue(centers.isEmpty())
-        advanceTimeBy(45_001);runCurrent()
+        advanceTimeBy(LOCATION_TIMEOUT_MS+1);runCurrent()
         assertTrue(messages.last().contains("timed out"));assertTrue(centers.isEmpty())
         verify(manager).removeUpdates(listener)
         listener.onLocationChanged(fix());assertTrue(centers.isEmpty())

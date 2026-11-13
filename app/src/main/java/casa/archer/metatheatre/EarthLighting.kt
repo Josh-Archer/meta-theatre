@@ -16,8 +16,8 @@ object EarthLighting {
         val time = instant.atZone(zone).toLocalTime()
         val hours = time.toNanoOfDay().toDouble() / 3_600_000_000_000.0
         val angle = (hours - 12.0) * PI / 12.0
-        // Asset: +Z = equator beneath USA, +Y = north, +X = geographic east.
-        return Sun((-sin(angle)).toFloat(), 0f, cos(angle).toFloat())
+        // Imported globe: +Z = equator/100 W, +Y = north, -X = east.
+        return Sun(sin(angle).toFloat(), 0f, cos(angle).toFloat())
     }
 
     fun dayWeight(solarElevation: Double): Double = smoothstep(-TWILIGHT_WIDTH, TWILIGHT_WIDTH, solarElevation)

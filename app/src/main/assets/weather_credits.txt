@@ -4,9 +4,12 @@ https://open-meteo.com/en/docs
 Weather data is licensed under Creative Commons Attribution 4.0 International:
 https://creativecommons.org/licenses/by/4.0/
 
-Meta Theatre transforms current model cloud coverage and weather codes into
-modeled orbital cloud density. This is an artistic interpretation of sampled
-weather conditions, not satellite imagery or a weather warning service.
+Meta Theatre transforms current model cloud coverage, layer fractions, and
+weather codes into modeled orbital cloud density. This is an artistic
+interpretation of sampled weather conditions, not satellite imagery or a
+weather warning service. Low, mid, and high cloud fractions are numerical
+weather model fields, not a satellite cloud mask. Wispy high cloud is used
+only when the high-layer fraction is present and dominates the lower layers.
 The original offline Earth maps retain their attribution in earth_credits.txt.
 
 Cloud density library and editable models authored for Meta Theatre in Blender;

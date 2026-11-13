@@ -28,7 +28,7 @@ internal object RealEarthTime {
 
     fun localSun(instant: Instant): Vector3 {
         val place = subsolar(instant)
-        // The asset's front meridian is 100 degrees west, not Greenwich.
-        return WeatherPlace(place.latitude, WeatherPlace.wrap(place.longitude - EarthLighting.CENTER_LONGITUDE)).normal()
+        // The imported runtime globe uses native -X for geographic east.
+        return WeatherPlace(place.latitude, WeatherPlace.wrap(EarthLighting.CENTER_LONGITUDE - place.longitude)).normal()
     }
 }

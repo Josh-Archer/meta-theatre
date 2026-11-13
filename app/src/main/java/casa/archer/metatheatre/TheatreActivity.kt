@@ -3,8 +3,11 @@ package casa.archer.metatheatre
 import android.os.SystemClock
 import android.os.Bundle
 import android.content.pm.ApplicationInfo
+import android.content.Intent
+import android.provider.Settings
 import android.util.Log
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.net.toUri
 import com.meta.spatial.compose.ComposeFeature
 import com.meta.spatial.compose.ComposeViewPanelRegistration
 import com.meta.spatial.core.Entity
@@ -38,6 +41,7 @@ import com.meta.spatial.toolkit.PanelStyleOptions
 import com.meta.spatial.toolkit.PixelDisplayOptions
 import com.meta.spatial.toolkit.QuadShapeOptions
 import com.meta.spatial.toolkit.Transform
+import com.meta.spatial.toolkit.Scale
 import com.meta.spatial.toolkit.UIPanelRenderOptions
 import com.meta.spatial.toolkit.Visible
 import com.meta.spatial.toolkit.UIPanelSettings
@@ -73,6 +77,7 @@ class TheatreActivity : AppSystemActivity() {
         }
     }
     private var ticker: Job? = null
+    private var panelBackingRenderer: PanelBackingRenderer? = null
     private var earthRenderer: EarthRenderer? = null
     private var solarRenderer: SolarRenderer? = null
     private var spaceVisitorRenderer: SpaceVisitorRenderer? = null
@@ -85,6 +90,7 @@ class TheatreActivity : AppSystemActivity() {
     private var handLocomotion: HandMicrogestureLocomotionSystem? = null
     private var locomotionTargets: LocomotionTargets? = null
     private var immersiveFocused = false
+    private var locationPermissionPending = false
     private val earthExploration = EarthExploration()
     private val deviceLocation by lazy {
         EarthLocationSession(scope, AndroidEarthLocation(this, diagnostic = {
@@ -107,13 +113,25 @@ class TheatreActivity : AppSystemActivity() {
                 }
             })
     }
+    private val earthDetail by lazy {
+        EarthDetailSession(this, scope, render = { region, image -> earthRenderer?.setDetail(region, image) },
+            renderTerrain = { bounds, image -> earthRenderer?.setTerrain(bounds, image) },
+            publish = {
+                if (model.earthDetailMessage.value != it) Log.i("Earth", "Earth detail: $it")
+                model.earthDetailMessage.value = it
+            })
+    }
+    private val detailViewSchedule = EarthUpdateSchedule()
     private val weather by lazy {
         WeatherSession(scope, OpenMeteoWeather(),
             render = { snapshot ->
                 earthRenderer?.setWeather(snapshot)
                 if (snapshot != null) Log.i("Weather", "Current orbital weather applied; cells=${snapshot.readings.size}")
             },
-            publish = { value -> model.weatherUi.value = value })
+            publish = { value -> model.weatherUi.value = value },
+            onSourceRetention = { enabled ->
+                if (enabled) earthRenderer?.allowWeatherSources() else earthRenderer?.releaseWeatherSources()
+            })
     }
     private var isdkSystem: IsdkSystem? = null
     private var videoReady = false
@@ -132,7 +150,8 @@ class TheatreActivity : AppSystemActivity() {
         super.onCreate(savedInstanceState)
         val diagnostic = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
             listOf("metatheatre.test_video", "metatheatre.test_weather", "metatheatre.test_earth_controls",
-                "metatheatre.test_location", "metatheatre.test_cloud_fixture")
+                "metatheatre.test_location", "metatheatre.test_precise_location", "metatheatre.test_cloud_fixture",
+                "metatheatre.test_earth_registration", "metatheatre.test_earth_detail", "metatheatre.test_asset_lifecycle")
                 .any { intent.getBooleanExtra(it, false) }
         model.onPrepareScreen = { ensureVideo() }
         model.onWatching = { watching -> applyWatching(watching) }
@@ -150,7 +169,17 @@ class TheatreActivity : AppSystemActivity() {
             deviceLocation.setEnabled(enabled)
             if (enabled) requestEarthLocation()
         }
-        model.onLocationRequest = ::requestEarthLocation
+        model.onLocationRequest = { requestEarthLocation() }
+        model.onPreciseLocation = { requestEarthLocation(precise = true) }
+        model.onLocationSettings = {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                "package:$packageName".toUri())
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            try { startActivity(intent) }
+            catch (_: android.content.ActivityNotFoundException) {
+                model.locationMessage.value = "Open headset Settings → Privacy → Location, then return and choose Above me."
+            }
+        }
         model.onRealRotation = { enabled ->
             earthExploration.setRealRotation(enabled)
             updateSolarEnvironment(force = true)
@@ -159,12 +188,17 @@ class TheatreActivity : AppSystemActivity() {
             if (immersiveFocused) {
                 grip?.cancelEarthGrab()
                 spaceVisitorRenderer?.cancelGrab()
+                val viewer = scene.getViewerPose()
+                val before = earthExploration.zoom
+                val clearance = earthZoomClearance(viewer)
                 when (control) {
-                    EarthSetting.ZOOM_IN -> earthExploration.zoomBy(1.12f, scene.getViewerPose())
-                    EarthSetting.ZOOM_OUT -> earthExploration.zoomBy(1f/1.12f, scene.getViewerPose())
-                    EarthSetting.ZOOM_RESET -> earthExploration.resetZoom(scene.getViewerPose())
+                    EarthSetting.ZOOM_IN -> earthExploration.zoomDetailBy(1.5f, viewer, clearance)
+                    EarthSetting.ZOOM_OUT -> earthExploration.zoomDetailBy(1f/1.5f, viewer, clearance)
+                    EarthSetting.ZOOM_RESET -> earthExploration.resetZoom(viewer, clearance)
                     else -> Unit
                 }
+                model.earthZoomMessage.value = if (kotlin.math.abs(before-earthExploration.zoom) < .0001f)
+                    "Viewing limit reached · screen and head clearance protected" else ""
                 syncEarthView()
             }
         }
@@ -181,10 +215,15 @@ class TheatreActivity : AppSystemActivity() {
             grip?.restorePlacement(ScreenPlacement.restore(scene.getViewerPose(), EarthOrbit.screenPose),
                 ScreenSize(EarthOrbit.screenWidth, EarthOrbit.screenHeight))
         }
+        model.onClearEarth = { clear ->
+            earthRenderer?.setClearEarth(clear)
+            weather.setActive(immersiveFocused && !clear)
+        }
         model.onWeatherEnabled = weather::setEnabled
         model.onWeatherRefresh = weather::refresh
         val cloudFixture = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
-            intent.getBooleanExtra("metatheatre.test_cloud_fixture", false)
+            (intent.getBooleanExtra("metatheatre.test_cloud_fixture", false) ||
+                intent.getBooleanExtra("metatheatre.test_asset_lifecycle", false))
         weather.setEnabled(!cloudFixture && model.state.liveWeatherEnabled)
         model.onScreenResize = { factor -> grip?.resize(factor) }
         model.onPlayerInteraction = { grip?.playerInteraction() }
@@ -241,6 +280,7 @@ class TheatreActivity : AppSystemActivity() {
         handLocomotion = systemManager.findSystem<HandMicrogestureLocomotionSystem>().also {
             it.enableHandLocomotion(immersiveFocused)
         }
+        panelBackingRenderer = PanelBackingRenderer(this).also { it.create() }
         locomotionTargets = LocomotionTargets()
 
         locationEntities = buildLocation(currentLocation)
@@ -252,13 +292,14 @@ class TheatreActivity : AppSystemActivity() {
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
             earthRenderer = earth
-            earth.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame)
+            earth.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame, earthExploration.renderScale)
             try {
+                earth.setClearEarth(model.clearEarth.value)
                 earth.create()
                 val solar = SolarRenderer(this@TheatreActivity)
                 solarRenderer = solar
                 solar.setWorldFrame(earthExploration.skyFrame)
-                solar.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t)
+                solar.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.renderRadius)
                 solar.create()
                 solar.setQuietCinema(quietCinema.active)
                 updateSolarEnvironment(force = true)
@@ -272,6 +313,7 @@ class TheatreActivity : AppSystemActivity() {
         // Grip-to-move is ScreenGripSystem. The video panel waits until playback.
         val panel = Entity.create(
             Panel(R.id.library_panel, MeshCollision.LineTest),
+            Scale(Vector3(1f, 1f, 1f)),
             Transform(initialSettings.screenPose),
             IsdkPanelDimensions(Vector2(initialSettings.screenSize.width, initialSettings.screenSize.height)),
             IsdkPanelResize(
@@ -331,24 +373,80 @@ class TheatreActivity : AppSystemActivity() {
         model.sceneReady()
         runVideoSurfaceTest()
         runEarthControlsTest()
+        runEarthRegistrationTest()
+        runAssetLifecycleTest()
         runLocationTest()
     }
 
     /** Exercise the real Above me button callback, only with existing user opt-in and permission. */
     private fun runLocationTest() {
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
-            !intent.getBooleanExtra("metatheatre.test_location", false) || !model.useCurrentLocation.value ||
+            !(intent.getBooleanExtra("metatheatre.test_location", false) || intent.getBooleanExtra("metatheatre.test_precise_location", false)) || !model.useCurrentLocation.value ||
             androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) return
         model.openEarthControls()
         model.earthSettingsOpen.value = true
-        model.earthSetting(EarthSetting.ABOVE_ME)
+        model.earthSetting(if (intent.getBooleanExtra("metatheatre.test_precise_location", false))
+            EarthSetting.PRECISE_LOCATION else EarthSetting.ABOVE_ME)
+    }
+
+    /** Debug-only native upload/cache smoke test. Never persists weather or location settings. */
+    private fun runAssetLifecycleTest() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_asset_lifecycle", false)) return
+        scope.launch {
+            try {
+                earthLoad?.join()
+                val earth = checkNotNull(earthRenderer)
+                checkNotNull(screen).getComponent<Scale>()
+                val place = WeatherPlace(0.0, -100.0)
+                val snapshot = WeatherSnapshot(place, WeatherPlace.grid(place).map {
+                    WeatherReading(it, Instant.now(), 2, 80, 12.0, 140.0, 5, 10, 95)
+                })
+                earth.setClearEarth(false)
+                earth.allowWeatherSources()
+                earth.setWeather(snapshot)
+                check(earth.retainedWeatherSourceBytes == WeatherCloudMap.SOURCE_BYTES)
+                val loads = earth.weatherSourceLoads
+                val uploads = earth.weatherUploads
+                Log.i(TAG, "High-cloud fixture ready; sourceBytes=${earth.retainedWeatherSourceBytes}; uploads=$uploads")
+                // Keep the rendered fixture visible for the compositor capture.
+                delay(20_000)
+                earth.setWeather(snapshot.copy(readings = snapshot.readings.map { it.copy(time = it.time.plusSeconds(900)) }))
+                check(earth.weatherUploads == uploads)
+                earth.setWeather(null)
+                check(earth.retainedWeatherSourceBytes == WeatherCloudMap.SOURCE_BYTES)
+                earth.setWeather(snapshot)
+                check(earth.weatherSourceLoads == loads)
+                earth.releaseWeatherSources()
+                earth.setWeather(null)
+                check(earth.retainedWeatherSourceBytes == 0)
+                earth.allowWeatherSources()
+                earth.setWeather(snapshot)
+                check(earth.weatherSourceLoads == loads + 1)
+                onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+                check(earth.retainedWeatherSourceBytes == 0)
+                val changed = snapshot.copy(readings = snapshot.readings.map { it.copy(windDirection = 150.0) })
+                earth.setWeather(changed)
+                check(earth.weatherSourceLoads == loads + 2)
+                earth.releaseWeatherSources()
+                earth.setWeather(null)
+                earth.setClearEarth(model.clearEarth.value)
+                check(earth.retainedWeatherSourceBytes == 0)
+                Log.i(TAG, "Asset lifecycle passed: panel Scale, timestamp upload reuse, regional reuse, disable, reenable, memory trim; sourceBytes=0")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (problem: Exception) {
+                Log.e(TAG, "Asset lifecycle diagnostic failed", problem)
+            }
+        }
     }
 
     /** Native transform/zoom smoke test, using a synthetic region and no saved location or Plex account. */
     private fun runEarthControlsTest() {
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
-            !intent.getBooleanExtra("metatheatre.test_earth_controls", false)) return
+            !(intent.getBooleanExtra("metatheatre.test_earth_controls", false) ||
+                intent.getBooleanExtra("metatheatre.test_earth_detail", false))) return
         scope.launch {
             delay(1_000)
             try {
@@ -359,16 +457,33 @@ class TheatreActivity : AppSystemActivity() {
                 val origin = scene.getViewOrigin().copy()
                 val yaw = scene.getViewSceneRotation()
                 val viewer = scene.getViewerPose()
-                val fixture = WeatherPlace(35.0,140.0)
+                val fixture = when {
+                    intent.getStringExtra("metatheatre.test_earth_place") == "carrollton" -> WeatherPlace(33.58,-85.08)
+                    intent.getStringExtra("metatheatre.test_earth_place") == "tokyo" -> WeatherPlace(35.0,140.0)
+                    intent.getBooleanExtra("metatheatre.test_mountain_cold", false) -> WeatherPlace(-50.3,-73.0)
+                    intent.getBooleanExtra("metatheatre.test_earth_detail", false) -> WeatherPlace(45.83,6.86)
+                    else -> WeatherPlace(35.0,140.0)
+                }
                 earthExploration.setRealRotation(true)
                 earthExploration.viewLocation(fixture,viewer)
-                earthExploration.zoomBy(2f,viewer)
+                earthExploration.zoomDetailBy(intent.getFloatExtra("metatheatre.test_earth_zoom",1000f),viewer,earthZoomClearance(viewer))
                 syncEarthView()
                 check(fixture.distance(WeatherPlace.viewed(earthExploration.earthPose(),viewer.t)) < .1)
-                check((earthExploration.earthPose().t-viewer.t).length() > EarthRenderer.RADIUS*1.012f+11.99f)
+                check((earthExploration.earthPose().t-viewer.t).length() > earthExploration.renderRadius*EarthExploration.SOLID_RADIUS+EarthExploration.NEAR_CLEARANCE-.01f)
+                check(earthExploration.detailZoom > 4f)
                 check(before == panel.getComponent<Transform>().transform && size == grip?.screenSize())
                 check(origin == scene.getViewOrigin() && yaw == scene.getViewSceneRotation())
-                Log.i(TAG,"Earth controls diagnostic passed; geographic recenter, safe zoom, screen and view origin preserved")
+                Log.i(TAG,"Earth controls diagnostic passed; surfaceZoom=${earthExploration.detailZoom}, scale=${earthExploration.renderScale}; geographic recenter, safe zoom, screen and view origin preserved")
+                if (intent.getBooleanExtra("metatheatre.test_earth_detail", false)) {
+                    val clear = intent.getBooleanExtra("metatheatre.test_earth_clear",true)
+                    model.clearEarth.value = clear // Diagnostic only; never persists the setting.
+                    checkNotNull(earthRenderer).setClearEarth(clear)
+                    earthDetail.setActive(true)
+                    earthDetail.view(fixture, earthExploration.detailZoom)
+                    model.openEarthControls()
+                    model.earthSettingsOpen.value = true
+                    Log.i(TAG, "Regional imagery diagnostic requested; clear=$clear")
+                }
                 if (intent.getBooleanExtra("metatheatre.test_cloud_fixture", false)) {
                     val snapshot = WeatherSnapshot(fixture, WeatherPlace.grid(fixture).map {
                         WeatherReading(it, Instant.now(), 95, 85, 12.0, 140.0)
@@ -378,6 +493,48 @@ class TheatreActivity : AppSystemActivity() {
                 }
             } catch (problem: Exception) {
                 Log.e(TAG,"Earth controls diagnostic failed (${problem.javaClass.simpleName})")
+            }
+        }
+    }
+
+    /** Compare requested geography with actual imported-mesh UV hits, not an inverse of our own placement math. */
+    private fun runEarthRegistrationTest() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_earth_registration", false)) return
+        scope.launch {
+            try {
+                earthLoad?.join()
+                earthExploration.setRealRotation(false)
+                if (intent.getBooleanExtra("metatheatre.test_detail_registration", false))
+                    earthExploration.zoomDetailBy(1000f,scene.getViewerPose(),earthZoomClearance(scene.getViewerPose()))
+                val landmarks = listOf(WeatherPlace(33.5818969, -85.0832399), WeatherPlace(34.0, -115.0),
+                    WeatherPlace(0.0, -100.0), WeatherPlace(35.0, 140.0), WeatherPlace(60.0, 25.0))
+                val fixtures = landmarks + landmarks
+                for ((index, place) in fixtures.withIndex()) {
+                    if (index == landmarks.size) earthExploration.spinBy(47f)
+                    val viewer = scene.getViewerPose()
+                    earthExploration.viewLocation(place, viewer)
+                    syncEarthView()
+                    delay(300)
+                    val center = earthExploration.earthPose().t
+                    val towardEye = (viewer.t - center).normalize()
+                    var hit: com.meta.spatial.runtime.HitInfo? = null
+                    for (attempt in 0..30) {
+                        hit = scene.lineSegmentIntersect(center + towardEye * (earthExploration.renderRadius * 1.1f), center)
+                        if (hit?.entity == earthRenderer?.surfaceEntity()) break
+                        delay(100)
+                    }
+                    check(hit?.entity == earthRenderer?.surfaceEntity()) { "Surface UV ray unavailable" }
+                    val uv = checkNotNull(hit).textureCoordinate
+                    val sampled = WeatherPlace(90.0 - uv.y * 180.0, WeatherPlace.wrap(uv.x * 360.0 - 180.0))
+                    val error = place.distance(sampled)
+                    // Only public fixture results, not the headset's provider coordinates.
+                    Log.i(TAG, "Earth UV registration fixture=$index errorDegrees=$error sampledLat=${sampled.latitude} sampledLon=${sampled.longitude}")
+                    check(error < .1) { "Imported surface geography differs from requested location" }
+                }
+                Log.i(TAG, "Earth UV registration diagnostic passed; 10 imported-mesh UV fixtures including manual spin")
+            } catch (problem: Exception) {
+                Log.e(TAG, "Earth UV registration diagnostic failed", problem)
             }
         }
     }
@@ -469,7 +626,8 @@ class TheatreActivity : AppSystemActivity() {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
         deviceLocation.setActive(immersiveFocused && screen != null)
-        weather.setActive(immersiveFocused)
+        weather.setActive(immersiveFocused && !model.clearEarth.value)
+        earthDetail.setActive(immersiveFocused || (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.getBooleanExtra("metatheatre.test_earth_detail", false)))
         handLocomotion?.enableHandLocomotion(immersiveFocused)
         if (!immersiveFocused) {
             locomotionTargets?.show(false)
@@ -491,10 +649,21 @@ class TheatreActivity : AppSystemActivity() {
         }
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (WeatherCloudCache.releasesOnTrim(level)) earthRenderer?.evictWeatherSources()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        earthRenderer?.evictWeatherSources()
+    }
+
     override fun onPause() {
         immersiveFocused = false
         deviceLocation.setActive(false)
         weather.setActive(false)
+        earthDetail.setActive(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.getBooleanExtra("metatheatre.test_earth_detail", false))
         spaceVisitorRenderer?.cancelGrab()
         grip?.cancelEarthGrab()
         handLocomotion?.enableHandLocomotion(false)
@@ -520,9 +689,11 @@ class TheatreActivity : AppSystemActivity() {
         scope.cancel()
         model.release()
         screenPlayer.release()
+        panelBackingRenderer?.unregister()
         earthRenderer?.unregister()
         solarRenderer?.unregister()
         super.onDestroy()
+        panelBackingRenderer?.release()
         earthRenderer?.release()
         solarRenderer?.release()
         spaceVisitorRenderer?.release()
@@ -533,8 +704,15 @@ class TheatreActivity : AppSystemActivity() {
         locomotionTargets?.show(handLocomotion?.areHandsInUse() == true)
         // A solar cycle changes by only 0.0042 degrees per second; no frame-rate updates needed.
         updateSolarEnvironment()
+        if (immersiveFocused && screen != null) {
+            val viewer = scene.getViewerPose()
+            if (earthExploration.ensureClearance(viewer,earthZoomClearance(viewer))) syncEarthView()
+        }
         spaceVisitorRenderer?.update()
-        if (immersiveFocused && model.weatherUi.value.enabled && earthRenderer?.target() != null &&
+        if (immersiveFocused && earthRenderer?.target() != null && detailViewSchedule.shouldUpdate(SystemClock.uptimeMillis())) {
+            earthDetail.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t), earthExploration.detailZoom)
+        }
+        if (immersiveFocused && !model.clearEarth.value && model.weatherUi.value.enabled && earthRenderer?.target() != null &&
             weatherViewSchedule.shouldUpdate(SystemClock.uptimeMillis())) {
             weather.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t))
         }
@@ -543,10 +721,13 @@ class TheatreActivity : AppSystemActivity() {
     private fun updateSolarEnvironment(force: Boolean = false) {
         if (!solarUpdateSchedule.shouldUpdate(SystemClock.uptimeMillis(), force)) return
         // Sample once so the visible Sun, Earth, planets, Moon, rings and chair share the same instant.
-        val instant = Instant.now()
+        val instant = if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            intent.getBooleanExtra("metatheatre.test_noon", false))
+            java.time.LocalDate.of(2026, 11, 12).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+            else Instant.now()
         val zone = ZoneId.systemDefault()
         val sun = earthExploration.sunPosition(instant, zone)
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(instant), earthExploration.skyFrame)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(instant), earthExploration.skyFrame, earthExploration.renderScale)
         earthRenderer?.update(instant, zone, sun)
         solarRenderer?.update(instant, zone, sun)
     }
@@ -766,30 +947,52 @@ class TheatreActivity : AppSystemActivity() {
 
     private fun syncEarthView() {
         model.earthViewLabel.value = earthExploration.label()
-        model.earthZoom.value = earthExploration.zoom
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame)
+        model.earthZoom.value = earthExploration.detailZoom
+        if (earthRenderer?.target() != null) earthDetail.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t), earthExploration.detailZoom)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame, earthExploration.renderScale)
         solarRenderer?.setWorldFrame(earthExploration.skyFrame)
-        solarRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t)
+        solarRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.renderRadius)
         spaceVisitorRenderer?.setWorldFrame(earthExploration.skyFrame)
-        spaceVisitorRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.zoom)
+        spaceVisitorRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.zoom, earthExploration.renderRadius)
         updateSolarEnvironment(force = true)
     }
 
-    private fun requestEarthLocation() {
-        if (!model.useCurrentLocation.value) return
+    private fun earthZoomClearance(viewer: Pose): Float {
+        if (model.screenHidden.value) return EarthExploration.NEAR_CLEARANCE
+        val panel = screen ?: return EarthExploration.NEAR_CLEARANCE
+        val size = grip?.screenSize() ?: ScreenSize(EarthOrbit.screenWidth,EarthOrbit.screenHeight)
+        val panelDistance = (panel.getComponent<Transform>().transform.t-viewer.t).length()
+        val halfDiagonal = kotlin.math.sqrt(size.width*size.width+size.height*size.height)*.5f
+        return maxOf(EarthExploration.NEAR_CLEARANCE,panelDistance+halfDiagonal+.5f)
+    }
+
+    private fun requestEarthLocation(precise: Boolean = false) {
+        if (precise && !model.useCurrentLocation.value) {
+            model.useCurrentLocation.value = true
+            model.state.saveUseCurrentLocation(true)
+        }
+        if (!model.useCurrentLocation.value || locationPermissionPending) return
         // Explicit user input must also work after a diagnostic launch disabled automatic location.
         deviceLocation.setEnabled(true)
-        model.locationMessage.value = "Requesting your approximate location…"
-        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) !=
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST)
+        model.locationMessage.value = "Requesting a fresh headset location…"
+        val permission = if (precise) android.Manifest.permission.ACCESS_FINE_LOCATION else android.Manifest.permission.ACCESS_COARSE_LOCATION
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(this, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
+            Log.i("EarthLocation", "Location permission request: precise=$precise, alreadyGranted=$granted")
+        if (!granted) {
+            locationPermissionPending = true
+            val permissions = if (precise) arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION,android.Manifest.permission.ACCESS_FINE_LOCATION)
+                else arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            requestPermissions(permissions, LOCATION_PERMISSION_REQUEST)
         } else deviceLocation.refresh()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != LOCATION_PERMISSION_REQUEST || !model.useCurrentLocation.value) return
-        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) deviceLocation.refresh()
+        if (requestCode != LOCATION_PERMISSION_REQUEST) return
+        locationPermissionPending = false
+        if (!model.useCurrentLocation.value) return
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) deviceLocation.refresh()
         else model.locationMessage.value = "Location access was denied. Enable it in headset app permissions, then choose Above me."
     }
 

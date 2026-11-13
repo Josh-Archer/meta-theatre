@@ -1,5 +1,45 @@
 # Meta Theatre Earth — 2026-10-04
 
+## Native longitude correction — 2026-10-20
+
+The source glTF globe has +X toward geographic east, but the Spatial SDK's
+imported runtime globe uses native -X toward east. Native surface ray hits
+revealed the mismatch: requesting the public Carrollton, GA city-center
+fixture (about 33.58 N, 85.08 W) sampled 33.58 N, 114.92 W before correction.
+This is the California placement reported by the user. The headset's network
+provider separately returned a fix near Carrollton, so replacing Wi-Fi location
+with a fixed city would hide the renderer bug.
+
+Geographic recentering and the inverse viewed-location calculation now use
+the imported runtime longitude direction. UTC/civil Sun directions and sidereal
+rotation use that same convention, preserving actual sunrise/rotation direction
+and weather-region sampling. No location is hardcoded in normal app behavior.
+
+The `metatheatre.test_earth_registration` debug-only launch mode loads the
+actual surface with temporary line-test collision, compares its native hit UVs
+against five public geographic fixtures, then repeats with manual spin. This
+independent check supplements the older inverse-math tests, which could pass
+while forward and inverse formulas shared the same wrong assumption. Normal
+app launches retain no Earth mesh collision. Raw headset coordinates are not
+included in logs or evidence; only public fixture UV results are recorded.
+
+The source assets, Milky Way update, user preferences and playback state are
+preserved. The rejected California-specific default, button and detail atlas
+remain reverted. At that validation, zoom detail still required a separate regional/tile
+solution; correcting longitude alone did not add source-image resolution.
+The 2026-10-21 regional update is documented below.
+
+On the awake Quest, the corrected Carrollton public fixture sampled approximately
+33.576 N / 85.085 W in the actual imported texture, and all ten native UV checks
+passed, including the repeated fixtures after 47° manual spin. The complete
+200-test suite and lint passed with zero errors. Final installed APK SHA-256:
+`9f416e71491c88ef451f95d758ddb1cfb4eca5d8283289c703b8a0036aad51a2`.
+The installed APK was compared against the local build byte for byte.
+An explicit fresh precise-Wi-Fi request also returned a usable fix and passed
+the native centering diagnostic. The app was then restarted normally for use.
+
+## Earth scene
+
 The Quest app uses a globe with continuous, headset-local lighting.
 Sunlight, the twilight band, city lights, clouds and the atmospheric rim follow
 the same moving sun. The initial view faces the nominal seat at **0° latitude, 100°W
@@ -165,8 +205,9 @@ renders, shader compilation and JVM tests do not establish those results.
 ## Preserved static variants and Unreal sandbox
 
 The earlier `blender/earth.blend`, source versions, `exports/earth/`,
-`renders/earth/`, and `earth_{day,twilight,night}.glb` assets remain available.
-They contain baked lighting states and are no longer selected by the app.
+`renders/earth/`, and `earth_{day,twilight,night}.glb` assets remain under `art/`.
+They contain baked lighting states, are no longer selected by the app, and are
+not packaged into the APK.
 `validation/earth_gltf_report.json` records their earlier validation.
 
 The existing Unreal asset sandbox retains the earlier native static assets under
@@ -187,3 +228,98 @@ highlights, cloud opacity, atmospheric color, geometry and time-dependent
 illumination. These are artistic composites, not live observational products.
 Full attribution ships in `app/src/main/assets/earth_credits.txt` and must travel
 with redistributed sources and derivatives.
+
+## Regional zoom detail and Clear Earth — 2026-10-21
+
+Coverage correction: close detail now uses the global `s2cloudless` WMS layer
+(2016/2017, existing CC BY 4.0 attribution). The similarly named
+`s2cloudless-2017` layer returned solid-white no-data imagery over Carrollton.
+The decoder rejects and evicts exactly all-white responses before presentation,
+including cached ones; the global surface or last valid detail stays visible.
+Textured snow and elevation normals are preserved. See
+`validation/EARTH_WHITE_FIX.md` for the Quest reproduction and validation.
+
+Close views (surface zoom >= 2.5x) now request a snapped 18-degree region from
+NASA GIBS BlueMarble_NextGeneration. This is historical, cloud-free 500 m
+imagery; it adds source detail rather than sharpening the 8K global image.
+The geographic observer and Wi-Fi fix are unchanged. Regions follow the viewed
+surface, with date-line splitting, pole-clamped latitude bounds, a 900 ms settle
+delay, cancellation, serialized decoding and an offline global fallback.
+No headset location provider or Plex credentials are sent to NASA. Broad viewed
+bounding boxes are transmitted, disclosed in Earth settings, and cached locally
+(up to six lossless PNG regions, at most 96 MiB). No provider URLs, response
+bodies, exact device coordinates or exceptions containing them are logged.
+
+The five surface samplers are preserved for the Quest Adreno binding layout.
+An on-demand 4096x6208 atlas replaces the normal-map texture: the original
+4096x2048 normals occupy rows 16–2063, and 4096x4096 regional RGB occupies
+2096–6191. Sixteen-row repeated gutters isolate both bands. Original normals,
+city lights, ocean mask, global day image, clouds and geometry retain their
+resolution. Regional edges blend into the global day image. City lights remain
+8K; close detail improves daytime land imagery, not street-level terrain or
+nighttime resolution. Polar caps at the exact pole retain the global fallback
+where the regional blend reaches its northern/southern edge.
+
+The atlas costs approximately 129.33 MiB with RGBA8 mipmaps, replacing the
+42.67 MiB normal texture: +86.67 MiB steady GPU/shared RAM once detail is loaded.
+It holds one region on the GPU. Replacing regions temporarily requires both
+atlases plus CPU decode buffers; no movie-playback peak measurement is implied.
+
+Weather settings now has a persistent **Clear Earth** toggle independent of
+Live weather. It hides the cloud shell and sets surface cloud shadow and
+city-light attenuation to zero. Atmosphere, terrain lighting and the day/night
+cycle remain. Live-weather requests pause while Clear Earth is enabled and
+resume according to the existing weather preference when it is disabled.
+
+## Mountain inspection and progressive streaming — 2026-10-21, latest update
+
+Close inspection now reaches approximately 117x surface magnification (previous
+limit about 9x), equivalent to roughly 40 km nominal altitude at the existing
+mean-radius scale. Magnification uses an expanded globe and a farther center,
+retaining physical head/screen clearance. The observer's latitude/longitude,
+rotation, chair, screen and tracking origin are preserved. Collision/planet
+clearance receives the expanded radius. The camera stays outside the 1.0035 R
+cloud shell with a 1.004 R safety boundary; the translucent atmosphere is not a
+solid obstacle. Reset zoom returns the exact original scale. Saved zoom values
+remain compatible.
+
+The earlier NASA-only regional atlas described above is superseded. The
+original 8K day/night/cloud maps and 4K ocean/normal maps remain unchanged.
+Regional satellite imagery uses EOX's CC BY 4.0 global `s2cloudless` service
+(contains modified Copernicus Sentinel data 2016 & 2017). Coverage adapts from
+18 degrees to 4 degrees at 12x and 1 degree at 40x surface zoom. A final 4096px
+one-degree image has about 27 m north/south sample spacing, instead of enlarging
+the previous 500 m dataset. This is historical imagery, not current conditions.
+Provider attribution is visible in Earth settings and bundled in earth_credits.txt.
+
+A separate regional surface draw progressively displays 512px, 2048px and 4096px
+textures. It never rebuilds or reuploads global normals. Full detail is assembled
+from sixteen independent 1024px requests at the same final pixel spacing, with
+four image requests in flight. Elevation-derived normal tiles from Mapzen/AWS
+load independently (two requests in flight) and are sampled in their native Web
+Mercator projection. Alpha is height metadata and is removed without changing
+RGB normal values. The shader restores normal slope scale and follows the real
+Sun; cloud shadows, night lights and ocean reflections use the existing maps.
+Mountain relief here is elevation-based shading, not displaced mountain meshes
+or walkable terrain.
+
+Prefetch begins at 1.3x zoom. A 150 ms settle interval replaces the old 900 ms
+wait. Raw provider bytes are cached directly (192 MiB cap) instead of waiting
+for a 4K PNG recompression. Cancelling a view cancels HTTP calls immediately,
+and a full-call timeout bounds each request. Preview, intermediate and full
+stages cannot regress to a lower resolution if requests finish out of order.
+Offline/error cases keep the last displayed image. Background use stops normal
+app downloads; the explicit debug benchmark can finish without a worn headset.
+No provider URLs or headset coordinates are logged, only aggregate request/cache
+counts and timing.
+
+Blender MCP authored `art/blender/earth_close_detail.blend` after saving a
+separate source backup. `earth_dynamic_surface_detail.glb` contains one mesh,
+no baked textures, 130,050 vertices and 260,096 triangles, retaining the source
+UV layout with denser spherical curvature. The original surface asset remains.
+The overlay has five samplers per draw, preserving the working Quest binding
+layout. Typical added graphics resources are around 100 MiB for a midlatitude
+close region, including full color mipmaps, regional normals and denser geometry;
+normal coverage is bounded to 96 source tiles. Texture replacement temporarily
+holds old and new regional images. Hardware timing/PSS snapshots are recorded
+in validation/MOUNTAIN_ZOOM.md; they are not movie-playback peak or FPS proof.

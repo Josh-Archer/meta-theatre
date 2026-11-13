@@ -31,7 +31,13 @@ internal class EarthExploration(private val now: () -> Instant = Instant::now) {
     var longitude = 0f; private set
     var spin = 0f; private set
     var zoom = 1f; private set
-    val distance get() = BASE_DISTANCE / zoom
+    private var nearClearance = NEAR_CLEARANCE
+    private val canonicalDistance get() = BASE_DISTANCE / zoom
+    // Expand the planet for close inspection instead of pushing it through the screen.
+    val renderScale get() = maxOf(1f, nearClearance / (canonicalDistance - EarthRenderer.RADIUS * SOLID_RADIUS))
+    val renderRadius get() = EarthRenderer.RADIUS * renderScale
+    val distance get() = canonicalDistance * renderScale
+    val detailZoom get() = (BASE_DISTANCE - EarthRenderer.RADIUS) / (canonicalDistance - EarthRenderer.RADIUS)
     var realRotation = false; private set
     private var rotationAnchor = now()
     var worldFrame = Pose(); private set
@@ -67,29 +73,41 @@ internal class EarthExploration(private val now: () -> Instant = Instant::now) {
     }
 
     fun spinBy(degrees: Float) { if (degrees.isFinite()) spin = wrap(spin + degrees) }
-    fun spinAt(instant: Instant = now()): Float = wrap(spin + if (realRotation) RealEarthTime.rotationSince(rotationAnchor, instant) else 0f)
+    fun spinAt(instant: Instant = now()): Float = wrap(spin - if (realRotation) RealEarthTime.rotationSince(rotationAnchor, instant) else 0f)
     fun setRealRotation(enabled: Boolean, instant: Instant = now()) {
         if (enabled == realRotation) return
         spin = spinAt(instant)
         rotationAnchor = instant
         realRotation = enabled
     }
-    fun zoomBy(factor: Float, viewer: Pose) {
+    fun zoomBy(factor: Float, viewer: Pose, nearClearance: Float = NEAR_CLEARANCE) {
         if (!factor.isFinite() || factor <= 0) return
         val center = earthPose().t
         val direction = center - viewer.t
         if (direction.length() < .01f) return
-        val seatOffset = (skyFrame * EarthRenderer.SEAT_EYE - viewer.t).length()
-        val safeLimit = minOf(MAX_ZOOM, BASE_DISTANCE / (EarthRenderer.RADIUS * 1.012f + NEAR_CLEARANCE + seatOffset))
-            .coerceAtLeast(MIN_ZOOM)
-        zoom = (zoom * factor).coerceIn(MIN_ZOOM, safeLimit)
+        this.nearClearance = maxOf(NEAR_CLEARANCE, nearClearance)
+        zoom = (zoom * factor).coerceIn(MIN_ZOOM, MAX_ZOOM)
         val target = viewer.t + direction.normalize() * distance
         worldFrame = Pose(worldFrame.t + target - center, worldFrame.q.copy())
     }
-    fun resetZoom(viewer: Pose) { zoomBy(1f / zoom, viewer) }
+    fun zoomDetailBy(factor: Float, viewer: Pose, nearClearance: Float = NEAR_CLEARANCE) {
+        if (!factor.isFinite() || factor <= 0) return
+        val targetDistance = EarthRenderer.RADIUS + (canonicalDistance - EarthRenderer.RADIUS) / factor
+        zoomBy(canonicalDistance / targetDistance, viewer, nearClearance)
+    }
+    fun ensureClearance(viewer: Pose, nearClearance: Float): Boolean {
+        // Avoid reapplying the same boundary transform every frame when float
+        // round-off puts the already-clamped distance a few micrometres short.
+        if ((earthPose().t-viewer.t).length() + .001f >= renderRadius*SOLID_RADIUS + maxOf(NEAR_CLEARANCE,nearClearance)) return false
+        zoomBy(1f,viewer,nearClearance)
+        return true
+    }
+    fun resetZoom(viewer: Pose, nearClearance: Float = NEAR_CLEARANCE) { zoomBy(1f / zoom, viewer, nearClearance) }
     fun viewLocation(place: WeatherPlace, viewer: Pose, instant: Instant = now()) {
         latitude = place.latitude.toFloat()
-        longitude = wrap((place.longitude - EarthLighting.CENTER_LONGITUDE).toFloat() + spinAt(instant))
+        // The SDK's imported glTF globe reflects source X: geographic east is
+        // native -X. Verified against actual on-device surface-hit UVs.
+        longitude = wrap((EarthLighting.CENTER_LONGITUDE - place.longitude).toFloat() + spinAt(instant))
         rebase(viewer)
     }
     fun restore(preset: ViewingPreset, viewer: Pose) {
@@ -136,9 +154,11 @@ internal class EarthExploration(private val now: () -> Instant = Instant::now) {
     companion object {
         val BASE_DISTANCE = (EarthRenderer.SEAT_EYE - EarthRenderer.CENTER).length()
         const val MIN_ZOOM = .75f
-        // Keep the entire nearby Roadster pass in front of Earth, including its bounding sphere.
-        val NEAR_CLEARANCE = SpaceVisitors.roadster.distance + SpaceVisitors.radius(SpaceVisitors.roadster)*SpaceVisitors.roadster.displayScale + 2f
-        val MAX_ZOOM = minOf(1.5f, BASE_DISTANCE / (EarthRenderer.RADIUS * 1.012f + NEAR_CLEARANCE))
+        // Nearby flybys move around the limb; they no longer dictate Earth viewing distance.
+        const val NEAR_CLEARANCE = 6f
+        // Cloud deck is 1.0035 R. Stay outside it and preserve a physical head/screen gap.
+        const val SOLID_RADIUS = 1.004f
+        val MAX_ZOOM = BASE_DISTANCE / (EarthRenderer.RADIUS * SOLID_RADIUS + .2f)
         fun renderPose(frame: Pose, spin: Float) = Pose(frame * EarthRenderer.CENTER,
             frame.q * EarthRenderer.orientation() * Quaternion(pitch = 0f, yaw = spin, roll = 0f))
     }

@@ -9,8 +9,7 @@ layout(set = 3, binding = 3) uniform sampler2D normalMap;
 layout(set = 3, binding = 4) uniform sampler2D oceanMap;
 layout(set = 3, binding = 5) uniform sampler2D cloudMap;
 
-vec3 terrainNormal(vec3 normal) {
-    mat3 frame = earthTangentFrame(normal);
+vec3 terrainNormal(mat3 frame) {
     vec3 bump = decodeData(texture(normalMap, earth.uv).xyz) * 2.0 - 1.0;
     // Authored OpenGL normal's +Y points north, while glTF's increasing V points south.
     bump.y = -bump.y;
@@ -23,17 +22,15 @@ void main() {
     vec3 sun = localSun();
     float elevation = dot(normal, sun);
     float daylight = dayWeight(elevation);
-    vec3 bumpNormal = terrainNormal(normal);
-    vec4 cloud = texture(cloudMap, earth.uv);
-    vec2 shadowOffset = cloudSunOffset(sun, earthTangentFrame(normal), elevation) * (0.4 + cloudProfile(cloud).x);
-    float cloudDensity = texture(cloudMap, earth.uv + shadowOffset).a;
-    float softDensity = texture(cloudMap, earth.uv + shadowOffset * 0.7).a;
-    float cloudTransmission = exp(-(cloudDensity + softDensity) * 0.7);
+    mat3 frame = earthTangentFrame(normal);
+    vec3 bumpNormal = terrainNormal(frame);
+    vec2 transmission = surfaceCloudTransmission(cloudMap, sun, frame, elevation);
+    float cloudTransmission = transmission.x;
     float diffuse = 0.065 + 0.935 * max(dot(bumpNormal, sun), 0.0) * cloudTransmission;
     vec3 day = texture(dayMap, earth.uv).rgb;
     vec3 city = texture(nightMap, earth.uv).rgb;
     float darkness = 1.0 - smoothstep(-0.12, 0.02, elevation);
-    vec3 color = day * (0.004 + daylight * diffuse) + city * 3.2 * darkness * exp(-cloud.a * 1.3);
+    vec3 color = day * (0.004 + daylight * diffuse) + city * 3.2 * darkness * transmission.y;
     vec3 view = localView();
     vec3 halfVector = sun + view;
     // At midnight the two vectors can be opposite; prevent a zero normalization.

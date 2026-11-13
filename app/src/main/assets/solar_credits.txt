@@ -1,6 +1,6 @@
 Meta Theatre solar environment
 
-Planet, Moon, Sun and Saturn ring maps: Solar System Scope / INOVE.
+Planet, Sun and Saturn ring maps: Solar System Scope / INOVE.
 https://www.solarsystemscope.com/textures/
 Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
 https://creativecommons.org/licenses/by/4.0/
@@ -8,12 +8,33 @@ Changes: resampling to 2048 x 1024; JPEG encoding; ring alpha reduced to a
 2048 x 1 radial profile. Lighting, scale, geometry, and arrangement are authored
 for this app. The source maps include artistic color treatment and filled gaps.
 
+Moon: NASA Scientific Visualization Studio, CGI Moon Kit, Ernie Wright.
+LROC Wide Angle Camera color mosaic: NASA/GSFC/Arizona State University.
+LOLA elevation: NASA/GSFC/MIT.
+https://svs.gsfc.nasa.gov/4720/
+Uses the December 2025 LROC color map and LOLA float elevation in kilometers
+relative to a 1737.4 km sphere. Changes: color resampling to 2048 x 1024,
+JPEG 98 4:4:4, and physical-slope OpenGL tangent normals at 2048 x 1024.
+No geometric displacement or exaggerated elevation. These NASA color maps
+include aesthetic exposure, white-balance and polar gap filling by their authors.
+
 Stars: Deep Star Maps 2020, Ernie Wright.
 NASA/Goddard Space Flight Center Scientific Visualization Studio.
 Gaia DR2: ESA/Gaia/DPAC.
 https://svs.gsfc.nasa.gov/4851/
-Uses the celestial-coordinate catalog map without constellation illustrations.
-Changes: fixed exposure/contrast curve and 4K sRGB runtime encoding.
+Uses the separate 8192 x 4096 celestial-coordinate Milky Way and Hipparcos/Tycho
+bright-star layers without constellation illustrations. Original HDR sources
+are preserved. Changes: independent diffuse/bright-star exposures, luminance
+toe and a hue-preserving peak-channel highlight shoulder, sRGB encoding,
+JPEG quality 98 with 4:4:4 sampling.
+The artistic exposure retains the catalog structure and stellar colors;
+this is not a calibrated naked-eye or camera exposure simulation.
+
+Surface lighting uses artist-tuned Lunar-Lambert and Minnaert profiles,
+with bounded grazing-angle response and a small cloud-haze contribution.
+Photometric model reference: USGS ISIS photemplate documentation.
+https://isis.astrogeology.usgs.gov/8.1.0/Application/presentation/PrinterFriendly/photemplate/photemplate.html
+The coefficients are presentation choices, not fitted planetary measurements.
 
 Planet mean radii: NASA/JPL Solar System Dynamics.
 https://ssd.jpl.nasa.gov/planets/phys_par.html

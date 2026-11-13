@@ -1,14 +1,30 @@
 # 3D asset workflow
 
+The [combined asset and efficiency validation](art/validation/REMAINING_ASSETS_20261112.md)
+records the integrated build, package audit and automated Quest results.
+
+The ISS material source, reviewed exports and validation are documented in
+[`art/ISS.md`](art/ISS.md).
+
+The [November 11 material and performance pass](art/validation/REALISM_PERFORMANCE_20261111.md) records the current chair/Roadster sources, exports, shader checks, and Quest verification status.
+
+The [November 11 celestial pass](art/validation/CELESTIAL_20261111.md) records
+the planet lighting, NASA lunar terrain, Milky Way grade, editable Blender
+source, Unreal review assets and current native validation.
+
 The live, local-time Earth, its editable Blender source, preserved static
 variants, Unreal sandbox copies, attribution, and validation notes are documented in
 [`art/EARTH.md`](art/EARTH.md).
 The eight-planet environment, Moon, shared Sun, Saturn rings, catalog sky and
 runtime budgets are documented in [`art/SOLAR_SYSTEM.md`](art/SOLAR_SYSTEM.md).
+The upgraded 8K Milky Way, editable source, matched previews, Unreal material,
+and Quest validation limits are documented in [`art/SPACE.md`](art/SPACE.md).
 The rebuilt lounge chair, packed Blender source, Unreal LODs, runtime costs,
 and headset installation status are documented in [`art/CHAIR.md`](art/CHAIR.md).
 The modern Roadster with an open roof and Starman, its standalone editable source,
 runtime cost and Unreal review are documented in [`art/ROADSTER.md`](art/ROADSTER.md).
+The ISS surface materials, exact geometry preservation, export steps and
+headset validation status are documented in [`art/ISS.md`](art/ISS.md).
 
 ## Current Meta Theatre app
 
@@ -17,6 +33,9 @@ This project is a native Android/Meta Quest app. It loads `.glb` models from
 the source authoring tool; export optimized glTF Binary (`.glb`) models there
 when they are intended for the current app. Keep editable `.blend` files in
 `art/blender/` and any reusable source textures in `art/textures/`.
+The baked phases `earth_{day,night,twilight}.glb` and `weather/cloud_patterns.png`
+are art sources only. Do not copy them back into `app/src/main/assets/`.
+`hull.glb` stays there because the spaceship cabin loads it.
 
 Large assets use Git LFS. Source files use project-relative texture and output
 paths. Execute an authoring script through MCP with its `__file__` set to the

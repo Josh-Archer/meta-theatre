@@ -35,7 +35,7 @@ internal data class WeatherPlace(val latitude: Double, val longitude: Double) {
         fun viewed(earth: Pose, viewer: Vector3): WeatherPlace {
             val local = (earth.q.inverse() * (viewer - earth.t).normalize()).normalize()
             return WeatherPlace(Math.toDegrees(asin(local.y.toDouble().coerceIn(-1.0, 1.0))),
-                wrap(-100.0 + Math.toDegrees(atan2(local.x.toDouble(), local.z.toDouble()))))
+                wrap(EarthLighting.CENTER_LONGITUDE - Math.toDegrees(atan2(local.x.toDouble(), local.z.toDouble()))))
         }
         fun wrap(degrees: Double) = ((degrees + 180) % 360 + 360) % 360 - 180
         /** 49 readings span the visible hemisphere. Tangent construction also works at both poles. */
@@ -68,14 +68,35 @@ internal enum class CloudPattern(val title: String) {
             95, 96, 99 -> THUNDERHEAD
             else -> if (cover >= 75) OVERCAST else CUMULUS
         }
+
+        /**
+         * 0 unless the provider sent all three layer percents and high cloud dominates.
+         * Partly cloudy and overcast codes alone stay at 0. A missing layer is not guessed.
+         * Fog, rain, snow, and thunderstorms keep their own shapes.
+         */
+        fun highCloudWeight(code: Int, cover: Int, low: Int?, mid: Int?, high: Int?): Float {
+            if (low == null || mid == null || high == null) return 0f
+            val base = forCode(code, cover)
+            if ((base != CUMULUS && base != OVERCAST) || cover < 15) return 0f
+            val margin = high - max(low, mid)
+            if (high < 25 || margin < 20) return 0f
+            return ((margin - 20) / 40f).coerceIn(0f, 1f)
+        }
+
+        fun resolve(code: Int, cover: Int, low: Int?, mid: Int?, high: Int?): CloudPattern =
+            if (highCloudWeight(code, cover, low, mid, high) >= 0.5f) CIRRUS else forCode(code, cover)
     }
 }
 
 internal data class WeatherReading(val place: WeatherPlace, val time: Instant, val code: Int, val cloudCover: Int,
-    val temperature: Double, val windDirection: Double) {
-    val pattern get() = CloudPattern.forCode(code, cloudCover)
+    val temperature: Double, val windDirection: Double,
+    val cloudCoverLow: Int? = null, val cloudCoverMid: Int? = null, val cloudCoverHigh: Int? = null) {
+    val pattern get() = CloudPattern.resolve(code, cloudCover, cloudCoverLow, cloudCoverMid, cloudCoverHigh)
+    val highCloudWeight get() = CloudPattern.highCloudWeight(code, cloudCover, cloudCoverLow, cloudCoverMid, cloudCoverHigh)
 }
 internal data class WeatherSnapshot(val center: WeatherPlace, val readings: List<WeatherReading>) {
+    /** Only timestamps are ignored; all geography, layers, coverage and wind remain in the key. */
+    fun appearance(): List<WeatherReading> = readings.map { it.copy(time = Instant.EPOCH) }
     val central get() = readings[readings.size / 2]
     val time get() = readings.minOf { it.time }
     fun fresh(now: Instant) = time <= now.plusSeconds(300) && time >= now.minusSeconds(30 * 60)
@@ -92,7 +113,7 @@ internal class OpenMeteoWeather(private val endpoint: String = "https://api.open
         fun number(value: Double) = String.format(Locale.US, "%.4f", value)
         val query = "latitude=" + points.joinToString(",") { number(it.latitude) } +
             "&longitude=" + points.joinToString(",") { number(it.longitude) } +
-            "&current=weather_code,cloud_cover,temperature_2m,wind_direction_10m&timeformat=unixtime&timezone=GMT"
+            "&current=weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,temperature_2m,wind_direction_10m&timeformat=unixtime&timezone=GMT"
         currentCoroutineContext().ensureActive()
         val connection = URL("$endpoint?$query").openConnection() as HttpURLConnection
         connection.connectTimeout = 8_000; connection.readTimeout = 8_000
@@ -127,7 +148,14 @@ internal class OpenMeteoWeather(private val endpoint: String = "https://api.open
                 val temp = value.getDouble("temperature_2m")
                 val wind = value.getDouble("wind_direction_10m")
                 check(cover in 0..100 && temp.isFinite() && temp in -120.0..80.0 && wind.isFinite() && wind in 0.0..360.0)
-                WeatherReading(point, Instant.ofEpochSecond(value.getLong("time")), value.getInt("weather_code"), cover, temp, wind)
+                fun layer(name: String): Int? {
+                    if (!value.has(name) || value.isNull(name)) return null
+                    val percent = value.getInt(name)
+                    check(percent in 0..100)
+                    return percent
+                }
+                WeatherReading(point, Instant.ofEpochSecond(value.getLong("time")), value.getInt("weather_code"), cover, temp, wind,
+                    layer("cloud_cover_low"), layer("cloud_cover_mid"), layer("cloud_cover_high"))
             }
             return WeatherSnapshot(center, readings)
         }
@@ -137,7 +165,8 @@ internal class OpenMeteoWeather(private val endpoint: String = "https://api.open
 /** Main-thread owner. View changes settle before fetching; disabled/background sessions never poll. */
 internal class WeatherSession(private val scope: CoroutineScope, private val source: WeatherSource,
     private val render: suspend (WeatherSnapshot?) -> Unit, private val publish: (WeatherUi) -> Unit,
-    private val now: () -> Instant = Instant::now, private val millis: () -> Long = android.os.SystemClock::elapsedRealtime) {
+    private val now: () -> Instant = Instant::now, private val millis: () -> Long = android.os.SystemClock::elapsedRealtime,
+    private val onSourceRetention: (Boolean) -> Unit = {}) {
     private var enabled = false
     private var active = false
     private var place: WeatherPlace? = null
@@ -148,6 +177,9 @@ internal class WeatherSession(private val scope: CoroutineScope, private val sou
     fun setEnabled(value: Boolean) {
         if (enabled == value) return
         enabled = value
+        // Disable releases the CPU atlases. Regional fallback only calls render(null)
+        // and must not, or every view change would decode them again.
+        onSourceRetention(value)
         restart()
     }
     fun setActive(value: Boolean) {
@@ -175,6 +207,8 @@ internal class WeatherSession(private val scope: CoroutineScope, private val sou
             return
         }
         job = scope.launch {
+            // Outside the shown region, restore the authored clouds while the next
+            // forecast loads. The source arrays stay resident for that rebuild.
             if (shown?.center?.distance(target)?.let { it >= 8 } == true) {
                 render(null); shown = null
             }

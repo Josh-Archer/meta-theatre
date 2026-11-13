@@ -129,11 +129,14 @@ shell's optical path near the horizon. City lights fade through cloud cover,
 and the night-side terrain retains a small ambient contribution. The 8K land
 and city textures, 4K cloud textures, and all three runtime meshes are preserved.
 
-Cloud coverage and weather codes come from Open-Meteo. The cloud shapes are
-modeled representations of those conditions, not satellite imagery. The weather
-panel shows the model time and labels offline data. Only viewed coordinates are
-sent to the provider; the app does not request GPS permission or store weather
-locations on disk. See [weather authoring and validation](art/WEATHER.md).
+Cloud coverage, weather codes, and modeled low, mid, and high layer fractions
+come from Open-Meteo. High cloud is drawn only when that high-layer fraction is
+present and dominates the lower layers. Partly cloudy codes alone stay
+billowing. The cloud shapes are modeled representations of those conditions,
+not satellite imagery. The weather panel shows the model time and labels
+offline data. Only viewed coordinates are sent to the provider; the app does
+not request GPS permission or store weather locations on disk. See
+[weather authoring and validation](art/WEATHER.md).
 
 ## Selectable environments
 

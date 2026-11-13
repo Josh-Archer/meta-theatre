@@ -1,0 +1,1161 @@
+{
+  "version": 1,
+  "sourceSha256": "142bca804ad63887a5881bcb5ec662d24cdade5e724367ce1f1679e30998ec7f",
+  "triangles": 260096,
+  "columns": 16,
+  "rows": 8,
+  "tiles": [
+    {
+      "asset": "earth/detail/000.glb",
+      "minU": 0.0,
+      "maxU": 0.06250002235174179,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 48812
+    },
+    {
+      "asset": "earth/detail/001.glb",
+      "minU": 0.06249995902180672,
+      "maxU": 0.1250000298023224,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47864
+    },
+    {
+      "asset": "earth/detail/002.glb",
+      "minU": 0.12499996274709702,
+      "maxU": 0.1875000298023224,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/003.glb",
+      "minU": 0.1874999701976776,
+      "maxU": 0.2500000298023224,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47876
+    },
+    {
+      "asset": "earth/detail/004.glb",
+      "minU": 0.2499999701976776,
+      "maxU": 0.3125000298023224,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47880
+    },
+    {
+      "asset": "earth/detail/005.glb",
+      "minU": 0.3124999701976776,
+      "maxU": 0.3750000596046448,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47860
+    },
+    {
+      "asset": "earth/detail/006.glb",
+      "minU": 0.3749999701976776,
+      "maxU": 0.4375000596046448,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/007.glb",
+      "minU": 0.4374999701976776,
+      "maxU": 0.5000000596046448,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47896
+    },
+    {
+      "asset": "earth/detail/008.glb",
+      "minU": 0.4999999701976776,
+      "maxU": 0.5625000596046448,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/009.glb",
+      "minU": 0.5625,
+      "maxU": 0.6250001192092896,
+      "minV": 0.0,
+      "maxV": 0.125,
+      "triangles": 1984,
+      "bytes": 47864
+    },
+    {
+      "asset": "earth/detail/010.glb",
+      "minU": 0.625,
+      "maxU": 0.6875001192092896,
+      "minV": 0.0,
+      "maxV": 0.125,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/011.glb",
+      "minU": 0.6875,
+      "maxU": 0.7500001192092896,
+      "minV": 0.0,
+      "maxV": 0.125,
+      "triangles": 1984,
+      "bytes": 47880
+    },
+    {
+      "asset": "earth/detail/012.glb",
+      "minU": 0.75,
+      "maxU": 0.8125001192092896,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/013.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001192092896,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47864
+    },
+    {
+      "asset": "earth/detail/014.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/015.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.0,
+      "maxV": 0.12499988079071045,
+      "triangles": 1984,
+      "bytes": 47896
+    },
+    {
+      "asset": "earth/detail/016.glb",
+      "minU": 0.0,
+      "maxU": 0.06250004470348358,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999982118606567,
+      "triangles": 2048,
+      "bytes": 50016
+    },
+    {
+      "asset": "earth/detail/017.glb",
+      "minU": 0.062499936670064926,
+      "maxU": 0.12500005960464478,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999982118606567,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/018.glb",
+      "minU": 0.12499993294477463,
+      "maxU": 0.18750005960464478,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999982118606567,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/019.glb",
+      "minU": 0.18749995529651642,
+      "maxU": 0.2500000596046448,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999982118606567,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/020.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999982118606567,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/021.glb",
+      "minU": 0.3124999701976776,
+      "maxU": 0.37500008940696716,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999988079071045,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/022.glb",
+      "minU": 0.3749999701976776,
+      "maxU": 0.43750008940696716,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999988079071045,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/023.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.1249997615814209,
+      "maxV": 0.24999988079071045,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/024.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.1249997615814209,
+      "maxV": 0.25,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/025.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.1249997615814209,
+      "maxV": 0.25,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/026.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.12499988079071045,
+      "maxV": 0.25,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/027.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001788139343,
+      "minV": 0.12499970197677612,
+      "maxV": 0.25,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/028.glb",
+      "minU": 0.7499998807907104,
+      "maxU": 0.8125001788139343,
+      "minV": 0.12499970197677612,
+      "maxV": 0.24999964237213135,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/029.glb",
+      "minU": 0.8124999403953552,
+      "maxU": 0.8750001788139343,
+      "minV": 0.12499970197677612,
+      "maxV": 0.2499997615814209,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/030.glb",
+      "minU": 0.8749999403953552,
+      "maxU": 0.9375001788139343,
+      "minV": 0.1249997615814209,
+      "maxV": 0.2499997615814209,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/031.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.1249997615814209,
+      "maxV": 0.2499997615814209,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/032.glb",
+      "minU": 0.0,
+      "maxU": 0.06250002980232239,
+      "minV": 0.24999964237213135,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 50176
+    },
+    {
+      "asset": "earth/detail/033.glb",
+      "minU": 0.06249995157122612,
+      "maxU": 0.12500004470348358,
+      "minV": 0.24999970197677612,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/034.glb",
+      "minU": 0.12499995529651642,
+      "maxU": 0.1875000298023224,
+      "minV": 0.24999970197677612,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/035.glb",
+      "minU": 0.1874999701976776,
+      "maxU": 0.2500000298023224,
+      "minV": 0.24999970197677612,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/036.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.2499997615814209,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/037.glb",
+      "minU": 0.3125,
+      "maxU": 0.37500008940696716,
+      "minV": 0.2499997615814209,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/038.glb",
+      "minU": 0.375,
+      "maxU": 0.4375000596046448,
+      "minV": 0.24999982118606567,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/039.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.24999982118606567,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/040.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.24999982118606567,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/041.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.24999988079071045,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/042.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.24999988079071045,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/043.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001192092896,
+      "minV": 0.2499995231628418,
+      "maxV": 0.375,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/044.glb",
+      "minU": 0.7499999403953552,
+      "maxU": 0.8125001192092896,
+      "minV": 0.2499995231628418,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/045.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001788139343,
+      "minV": 0.24999958276748657,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/046.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.24999964237213135,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/047.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.24999964237213135,
+      "maxV": 0.37499988079071045,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/048.glb",
+      "minU": 0.0,
+      "maxU": 0.0625000149011612,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 50004
+    },
+    {
+      "asset": "earth/detail/049.glb",
+      "minU": 0.062499966472387314,
+      "maxU": 0.1250000298023224,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48944
+    },
+    {
+      "asset": "earth/detail/050.glb",
+      "minU": 0.12499996274709702,
+      "maxU": 0.18750004470348358,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/051.glb",
+      "minU": 0.1874999850988388,
+      "maxU": 0.2500000596046448,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/052.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48940
+    },
+    {
+      "asset": "earth/detail/053.glb",
+      "minU": 0.3125,
+      "maxU": 0.37500008940696716,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48944
+    },
+    {
+      "asset": "earth/detail/054.glb",
+      "minU": 0.375,
+      "maxU": 0.43750008940696716,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48944
+    },
+    {
+      "asset": "earth/detail/055.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/056.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.3749999403953552,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/057.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.3749999403953552,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/058.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.3749999403953552,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/059.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001192092896,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/060.glb",
+      "minU": 0.7499999403953552,
+      "maxU": 0.8125001192092896,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/061.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001192092896,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/062.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/063.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.37499988079071045,
+      "maxV": 0.5,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/064.glb",
+      "minU": 0.0,
+      "maxU": 0.0625000149011612,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 50004
+    },
+    {
+      "asset": "earth/detail/065.glb",
+      "minU": 0.062499966472387314,
+      "maxU": 0.1250000298023224,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/066.glb",
+      "minU": 0.12499996274709702,
+      "maxU": 0.18750004470348358,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/067.glb",
+      "minU": 0.1874999850988388,
+      "maxU": 0.2500000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/068.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48944
+    },
+    {
+      "asset": "earth/detail/069.glb",
+      "minU": 0.3125,
+      "maxU": 0.37500008940696716,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48944
+    },
+    {
+      "asset": "earth/detail/070.glb",
+      "minU": 0.375,
+      "maxU": 0.43750008940696716,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/071.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/072.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48948
+    },
+    {
+      "asset": "earth/detail/073.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48928
+    },
+    {
+      "asset": "earth/detail/074.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/075.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001192092896,
+      "minV": 0.4999999403953552,
+      "maxV": 0.625,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/076.glb",
+      "minU": 0.75,
+      "maxU": 0.8125001192092896,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/077.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001192092896,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48952
+    },
+    {
+      "asset": "earth/detail/078.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/079.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.4999999403953552,
+      "maxV": 0.6250000596046448,
+      "triangles": 2048,
+      "bytes": 48956
+    },
+    {
+      "asset": "earth/detail/080.glb",
+      "minU": 0.0,
+      "maxU": 0.06250002980232239,
+      "minV": 0.625,
+      "maxV": 0.7500001788139343,
+      "triangles": 2048,
+      "bytes": 50184
+    },
+    {
+      "asset": "earth/detail/081.glb",
+      "minU": 0.06249995157122612,
+      "maxU": 0.12500004470348358,
+      "minV": 0.625,
+      "maxV": 0.7500001788139343,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/082.glb",
+      "minU": 0.12499995529651642,
+      "maxU": 0.1875000298023224,
+      "minV": 0.625,
+      "maxV": 0.7500001192092896,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/083.glb",
+      "minU": 0.1874999701976776,
+      "maxU": 0.2500000298023224,
+      "minV": 0.625,
+      "maxV": 0.7500001192092896,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/084.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.625,
+      "maxV": 0.7500001192092896,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/085.glb",
+      "minU": 0.3125,
+      "maxU": 0.37500008940696716,
+      "minV": 0.625,
+      "maxV": 0.7500001192092896,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/086.glb",
+      "minU": 0.375,
+      "maxU": 0.4375000596046448,
+      "minV": 0.625,
+      "maxV": 0.7500000596046448,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/087.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.625,
+      "maxV": 0.7500000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/088.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.625,
+      "maxV": 0.7500000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/089.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.6249999403953552,
+      "maxV": 0.75,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/090.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.6249999403953552,
+      "maxV": 0.75,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/091.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001192092896,
+      "minV": 0.625,
+      "maxV": 0.7500002980232239,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/092.glb",
+      "minU": 0.75,
+      "maxU": 0.8125001192092896,
+      "minV": 0.625,
+      "maxV": 0.7500002980232239,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/093.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001788139343,
+      "minV": 0.625,
+      "maxV": 0.7500002384185791,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/094.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.625,
+      "maxV": 0.7500002384185791,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/095.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.625,
+      "maxV": 0.7500002384185791,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/096.glb",
+      "minU": 0.0,
+      "maxU": 0.06250004470348358,
+      "minV": 0.7500001192092896,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 50024
+    },
+    {
+      "asset": "earth/detail/097.glb",
+      "minU": 0.062499936670064926,
+      "maxU": 0.12500005960464478,
+      "minV": 0.7500001192092896,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/098.glb",
+      "minU": 0.12499993294477463,
+      "maxU": 0.18750005960464478,
+      "minV": 0.7500001192092896,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/099.glb",
+      "minU": 0.18749995529651642,
+      "maxU": 0.2500000596046448,
+      "minV": 0.7500000596046448,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/100.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.7500000596046448,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/101.glb",
+      "minU": 0.3124999701976776,
+      "maxU": 0.37500008940696716,
+      "minV": 0.7500000596046448,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/102.glb",
+      "minU": 0.3749999701976776,
+      "maxU": 0.43750008940696716,
+      "minV": 0.7500000596046448,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/103.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.7500000596046448,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48960
+    },
+    {
+      "asset": "earth/detail/104.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.75,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/105.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250000596046448,
+      "minV": 0.75,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/106.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875000596046448,
+      "minV": 0.75,
+      "maxV": 0.875,
+      "triangles": 2048,
+      "bytes": 48964
+    },
+    {
+      "asset": "earth/detail/107.glb",
+      "minU": 0.6875000596046448,
+      "maxU": 0.7500001788139343,
+      "minV": 0.75,
+      "maxV": 0.8750001788139343,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/108.glb",
+      "minU": 0.75,
+      "maxU": 0.8125001788139343,
+      "minV": 0.7500002384185791,
+      "maxV": 0.8750001788139343,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/109.glb",
+      "minU": 0.8124999403953552,
+      "maxU": 0.8750001788139343,
+      "minV": 0.7500002384185791,
+      "maxV": 0.8750001788139343,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/110.glb",
+      "minU": 0.8749999403953552,
+      "maxU": 0.9375001788139343,
+      "minV": 0.7500002384185791,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/111.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.7500001788139343,
+      "maxV": 0.8750000596046448,
+      "triangles": 2048,
+      "bytes": 48968
+    },
+    {
+      "asset": "earth/detail/112.glb",
+      "minU": 0.0,
+      "maxU": 0.06250002235174179,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 48816
+    },
+    {
+      "asset": "earth/detail/113.glb",
+      "minU": 0.06249995902180672,
+      "maxU": 0.1250000298023224,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47868
+    },
+    {
+      "asset": "earth/detail/114.glb",
+      "minU": 0.12499996274709702,
+      "maxU": 0.1875000298023224,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/115.glb",
+      "minU": 0.1874999701976776,
+      "maxU": 0.2500000298023224,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47880
+    },
+    {
+      "asset": "earth/detail/116.glb",
+      "minU": 0.2499999850988388,
+      "maxU": 0.3125000596046448,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/117.glb",
+      "minU": 0.3125,
+      "maxU": 0.3750000596046448,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47868
+    },
+    {
+      "asset": "earth/detail/118.glb",
+      "minU": 0.375,
+      "maxU": 0.4375000596046448,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/119.glb",
+      "minU": 0.4375,
+      "maxU": 0.5000000596046448,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47900
+    },
+    {
+      "asset": "earth/detail/120.glb",
+      "minU": 0.5,
+      "maxU": 0.5625000596046448,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/121.glb",
+      "minU": 0.5625000596046448,
+      "maxU": 0.6250001192092896,
+      "minV": 0.8749999403953552,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47868
+    },
+    {
+      "asset": "earth/detail/122.glb",
+      "minU": 0.6250000596046448,
+      "maxU": 0.6875001192092896,
+      "minV": 0.8749999403953552,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47892
+    },
+    {
+      "asset": "earth/detail/123.glb",
+      "minU": 0.6875,
+      "maxU": 0.7500001192092896,
+      "minV": 0.8749999403953552,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47884
+    },
+    {
+      "asset": "earth/detail/124.glb",
+      "minU": 0.75,
+      "maxU": 0.8125001192092896,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47888
+    },
+    {
+      "asset": "earth/detail/125.glb",
+      "minU": 0.8125,
+      "maxU": 0.8750001192092896,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47868
+    },
+    {
+      "asset": "earth/detail/126.glb",
+      "minU": 0.875,
+      "maxU": 0.9375001192092896,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47892
+    },
+    {
+      "asset": "earth/detail/127.glb",
+      "minU": 0.9375,
+      "maxU": 1.0000001192092896,
+      "minV": 0.8750000596046448,
+      "maxV": 1.0,
+      "triangles": 1984,
+      "bytes": 47904
+    }
+  ]
+}
