@@ -115,4 +115,41 @@ class OrbitalWeatherIntegrationTest {
         session.setEnabled(false);runCurrent();advanceTimeBy(25_000);runCurrent()
         assertNull(rendered.last());assertFalse(states.last().enabled)
     }
+
+    @Test fun explicitDisableReleasesSourcesWhileRegionalFallbackAndBackgroundKeepThem() = runTest {
+        val retention = mutableListOf<Boolean>()
+        val rendered = mutableListOf<WeatherSnapshot?>()
+        val session = WeatherSession(backgroundScope,
+            WeatherSource { snapshot(it, epoch.plusMillis(testScheduler.currentTime)) },
+            { rendered.add(it) }, { },
+            { epoch.plusMillis(testScheduler.currentTime) }, { testScheduler.currentTime },
+            { retention.add(it) })
+        session.view(home)
+        session.setEnabled(true)
+        session.setActive(true)
+        assertEquals(listOf(true), retention)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(0.0, rendered.last()!!.center.latitude, 0.0)
+        assertEquals(listOf(true), retention)
+
+        session.setActive(false); runCurrent()
+        session.setActive(true); runCurrent()
+        assertEquals("Leaving the session active must not evict source arrays", listOf(true), retention)
+        assertNotNull(rendered.last())
+
+        session.view(WeatherPlace(40.0, 40.0)); runCurrent()
+        assertNull("A new region restores the authored map while the forecast loads", rendered.last())
+        assertEquals("Regional fallback must not evict source arrays", listOf(true), retention)
+        advanceTimeBy(6_000); runCurrent()
+        assertEquals(40.0, rendered.last()!!.center.latitude, 0.0)
+        assertEquals(listOf(true), retention)
+
+        session.setEnabled(false); runCurrent()
+        assertEquals(listOf(true, false), retention)
+        assertNull(rendered.last())
+
+        session.setEnabled(true); runCurrent()
+        assertEquals(listOf(true, false, true), retention)
+        assertEquals(40.0, rendered.last()!!.center.latitude, 0.0)
+    }
 }

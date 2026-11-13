@@ -123,13 +123,19 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
     companion object {
         private const val GRID_W=128
         private const val GRID_H=64
+        const val WIDTH = 8192
+        const val HEIGHT = 4096
+        const val STRUCTURE_WIDTH = 4096
+        const val STRUCTURE_HEIGHT = 2048
+        /** 8192×4096 alpha plus three 4096×2048 channels. Excludes bitmap and allocator overhead. */
+        const val SOURCE_BYTES = WIDTH * HEIGHT + 3 * STRUCTURE_WIDTH * STRUCTURE_HEIGHT
         fun load(assets: AssetManager): WeatherCloudMap {
             fun decode(path: String)=assets.open(path).use{checkNotNull(BitmapFactory.decodeStream(it))}
             val base=decode("earth/clouds.png")
             val width = base.width; val height = base.height
             val original: ByteArray
             try {
-                check(width==8192 && height==4096)
+                check(width==WIDTH && height==HEIGHT)
                 // Decode a row at a time instead of allocating another full-resolution IntArray.
                 original=ByteArray(width*height)
                 val row=IntArray(width)
@@ -142,7 +148,7 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
             // structure decode and its 24 MiB channel arrays.
             val pattern=decode("weather/cloud_structure.png")
             try {
-                check(pattern.width==4096 && pattern.height==2048)
+                check(pattern.width==STRUCTURE_WIDTH && pattern.height==STRUCTURE_HEIGHT)
                 val channels=Array(3){ByteArray(pattern.width*pattern.height)};val row=IntArray(pattern.width)
                 for(y in 0 until pattern.height){
                     pattern.getPixels(row,0,pattern.width,0,y,pattern.width,1)
