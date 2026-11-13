@@ -20,6 +20,7 @@ import com.meta.spatial.runtime.SceneMaterialAttribute
 import com.meta.spatial.runtime.SceneMaterialDataType
 import com.meta.spatial.runtime.SceneMesh
 import com.meta.spatial.runtime.SceneTexture
+import com.meta.spatial.runtime.TriangleMesh
 import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.MeshCollision
 import com.meta.spatial.toolkit.Scale
@@ -44,17 +45,26 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private var originalCloudTexture: SceneTexture? = null
     private var weatherTexture: SceneTexture? = null
     private var weatherMap: WeatherCloudMap? = null
+    private var detailSession: EarthDetailSession? = null
+    private var surfaceMesh: SceneMesh? = null
+    private var detailViewer = SEAT_EYE.copy()
+    private var detailZoom = 1f
+    private var uploadedTriangles = -1
+    private var uploadedDetail = false
     private fun pose() = EarthExploration.renderPose(worldFrame, spin)
     internal fun target(): VisitorTarget? = if (entities.size != 3) null else
         VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
 
-    fun setExploration(frame: Pose, spinDegrees: Float, lightingFrame: Pose) {
+    fun setExploration(frame: Pose, spinDegrees: Float, lightingFrame: Pose, viewer: Vector3, zoom: Float) {
         val moved = skyFrame != lightingFrame
         worldFrame = Pose(frame.t.copy(), frame.q.copy())
         skyFrame = Pose(lightingFrame.t.copy(), lightingFrame.q.copy())
         spin = spinDegrees
+        detailViewer = viewer.copy()
+        detailZoom = zoom
         entities.forEach { it.setComponent(Transform(pose())) }
         if (moved) update()
+        refreshSurfaceDetail()
     }
 
     @OptIn(SpatialSDKExperimentalAPI::class)
@@ -68,6 +78,11 @@ class EarthRenderer(private val activity: TheatreActivity) {
                     activity.assets.open(name).use { input -> outputStream().use { input.copyTo(it) } }
                 }
             }
+        }
+        detailSession = withContext(Dispatchers.IO) {
+            runCatching { EarthSurfaceGeometry.parseGlb(files.getValue("surface").readBytes()) }
+                .onFailure { Log.e("Earth", "Surface partition unavailable; submitting the full sphere", it) }
+                .getOrNull()?.let { EarthDetailSession(it) }
         }
         // Decode off the UI thread; native texture/material upload and scene mutation stay on main.
         val sampler = SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)
@@ -104,7 +119,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
         layers.forEach { layer ->
             val creator = "mesh://earth_$layer"
             activity.registerMeshCreator(creator) { _: Entity ->
-                SceneMesh.loadLocalFile(files.getValue(layer).absolutePath, listOf(byLayer.getValue(layer)))
+                if (layer == "surface") createSurfaceMesh(byLayer.getValue(layer), files.getValue(layer))
+                else SceneMesh.loadLocalFile(files.getValue(layer).absolutePath, listOf(byLayer.getValue(layer)))
             }
             creators.add(creator)
             entities.add(Entity.create(
@@ -158,6 +174,70 @@ class EarthRenderer(private val activity: TheatreActivity) {
         materials.forEach { it.setAttribute("sunPosition", position) }
     }
 
+    private fun createSurfaceMesh(material: SceneMaterial, file: File): SceneMesh {
+        val session = detailSession
+        if (session == null) return SceneMesh.loadLocalFile(file.absolutePath, listOf(material))
+        return try {
+            val submission = currentSubmission(session)
+            val mesh = SceneMesh.fromTriangleMesh(triangleMesh(submission, material), false)
+            surfaceMesh = mesh
+            noteSubmission(submission)
+            mesh
+        } catch (error: RuntimeException) {
+            Log.e("Earth", "Patch submission failed; using the full surface", error)
+            detailSession = null
+            surfaceMesh = null
+            SceneMesh.loadLocalFile(file.absolutePath, listOf(material))
+        }
+    }
+
+    private fun refreshSurfaceDetail() {
+        val mesh = surfaceMesh ?: return
+        val material = surfaceMaterial ?: return
+        val session = detailSession ?: return
+        try {
+            val submission = currentSubmission(session)
+            if (!submission.refreshed && uploadedTriangles == submission.triangleCount &&
+                uploadedDetail == submission.detailVisible) return
+            mesh.updateWithTriangleMesh(triangleMesh(submission, material), false)
+            noteSubmission(submission)
+        } catch (error: RuntimeException) {
+            Log.e("Earth", "Surface patch update failed; keeping the previous submission", error)
+        }
+    }
+
+    private fun currentSubmission(session: EarthDetailSession): EarthDetailSubmission {
+        val sample = EarthDetailFrames.sample(worldFrame, spin, detailViewer, detailZoom)
+        return session.view(sample.center, sample.distance, sample.zoom)
+    }
+
+    private fun triangleMesh(submission: EarthDetailSubmission, material: SceneMaterial): TriangleMesh {
+        val mesh = TriangleMesh(
+            submission.positions.size / 3, submission.indices.size,
+            intArrayOf(0, submission.indices.size), arrayOf(material),
+        )
+        mesh.updateGeometry(0, submission.positions, submission.normals, submission.uvs, blendColors(submission.blend))
+        mesh.updatePrimitives(0, submission.indices)
+        return mesh
+    }
+
+    private fun blendColors(blend: FloatArray): IntArray = IntArray(blend.size) { index ->
+        val alpha = (blend[index].coerceIn(0f, 1f) * 255f + .5f).toInt().coerceIn(0, 255)
+        (alpha shl 24) or 0x00FFFFFF
+    }
+
+    private fun noteSubmission(submission: EarthDetailSubmission) {
+        if (uploadedTriangles == submission.triangleCount && uploadedDetail == submission.detailVisible) return
+        uploadedTriangles = submission.triangleCount
+        uploadedDetail = submission.detailVisible
+        Log.i(
+            "Earth",
+            "Surface submission ${submission.triangleCount}/${submission.authoredTriangles} triangles, " +
+                "${submission.drawCalls} draw, detailVisible=${submission.detailVisible}. " +
+                "Quest GPU frame time is unmeasured.",
+        )
+    }
+
     fun unregister() {
         creators.forEach { activity.unregisterMeshCreator(it) }
         creators.clear()
@@ -167,6 +247,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
     fun release() {
         cloudMaterial = null
         surfaceMaterial = null
+        surfaceMesh = null
+        detailSession = null
         weatherTexture?.destroy(); weatherTexture = null
         weatherMap = null
         materials.forEach { it.destroy() }

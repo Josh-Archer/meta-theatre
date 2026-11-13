@@ -252,7 +252,8 @@ class TheatreActivity : AppSystemActivity() {
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
             earthRenderer = earth
-            earth.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame)
+            earth.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame,
+                scene.getViewerPose().t, earthExploration.zoom)
             try {
                 earth.create()
                 val solar = SolarRenderer(this@TheatreActivity)
@@ -546,7 +547,8 @@ class TheatreActivity : AppSystemActivity() {
         val instant = Instant.now()
         val zone = ZoneId.systemDefault()
         val sun = earthExploration.sunPosition(instant, zone)
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(instant), earthExploration.skyFrame)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(instant), earthExploration.skyFrame,
+            scene.getViewerPose().t, earthExploration.zoom)
         earthRenderer?.update(instant, zone, sun)
         solarRenderer?.update(instant, zone, sun)
     }
@@ -767,7 +769,8 @@ class TheatreActivity : AppSystemActivity() {
     private fun syncEarthView() {
         model.earthViewLabel.value = earthExploration.label()
         model.earthZoom.value = earthExploration.zoom
-        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame)
+        earthRenderer?.setExploration(earthExploration.worldFrame, earthExploration.spinAt(), earthExploration.skyFrame,
+            scene.getViewerPose().t, earthExploration.zoom)
         solarRenderer?.setWorldFrame(earthExploration.skyFrame)
         solarRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t)
         spaceVisitorRenderer?.setWorldFrame(earthExploration.skyFrame)
