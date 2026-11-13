@@ -113,7 +113,10 @@ class TheatreActivity : AppSystemActivity() {
                 earthRenderer?.setWeather(snapshot)
                 if (snapshot != null) Log.i("Weather", "Current orbital weather applied; cells=${snapshot.readings.size}")
             },
-            publish = { value -> model.weatherUi.value = value })
+            publish = { value -> model.weatherUi.value = value },
+            onSourceRetention = { enabled ->
+                if (enabled) earthRenderer?.allowWeatherSources() else earthRenderer?.releaseWeatherSources()
+            })
     }
     private var isdkSystem: IsdkSystem? = null
     private var videoReady = false
@@ -489,6 +492,16 @@ class TheatreActivity : AppSystemActivity() {
             SessionState.FOCUSED -> screenPlayer.onMenuClosed()
             else -> Unit
         }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (WeatherCloudCache.releasesOnTrim(level)) earthRenderer?.evictWeatherSources()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        earthRenderer?.evictWeatherSources()
     }
 
     override fun onPause() {

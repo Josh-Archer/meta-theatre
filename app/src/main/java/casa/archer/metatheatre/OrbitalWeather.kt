@@ -163,7 +163,8 @@ internal class OpenMeteoWeather(private val endpoint: String = "https://api.open
 /** Main-thread owner. View changes settle before fetching; disabled/background sessions never poll. */
 internal class WeatherSession(private val scope: CoroutineScope, private val source: WeatherSource,
     private val render: suspend (WeatherSnapshot?) -> Unit, private val publish: (WeatherUi) -> Unit,
-    private val now: () -> Instant = Instant::now, private val millis: () -> Long = android.os.SystemClock::elapsedRealtime) {
+    private val now: () -> Instant = Instant::now, private val millis: () -> Long = android.os.SystemClock::elapsedRealtime,
+    private val onSourceRetention: (Boolean) -> Unit = {}) {
     private var enabled = false
     private var active = false
     private var place: WeatherPlace? = null
@@ -174,6 +175,9 @@ internal class WeatherSession(private val scope: CoroutineScope, private val sou
     fun setEnabled(value: Boolean) {
         if (enabled == value) return
         enabled = value
+        // Disable releases the CPU atlases. Regional fallback only calls render(null)
+        // and must not, or every view change would decode them again.
+        onSourceRetention(value)
         restart()
     }
     fun setActive(value: Boolean) {
@@ -201,6 +205,8 @@ internal class WeatherSession(private val scope: CoroutineScope, private val sou
             return
         }
         job = scope.launch {
+            // Outside the shown region, restore the authored clouds while the next
+            // forecast loads. The source arrays stay resident for that rebuild.
             if (shown?.center?.distance(target)?.let { it >= 8 } == true) {
                 render(null); shown = null
             }
