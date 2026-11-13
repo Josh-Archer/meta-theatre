@@ -21,9 +21,17 @@ const root = path.resolve(__dirname, '../..');
     triangles += count;
   }
   const source = fs.readFileSync(path.join(root, 'art/textures/weather/cloud_patterns.png'));
-  const runtime = fs.readFileSync(path.join(root, 'app/src/main/assets/weather/cloud_patterns.png'));
+  const runtime = path.join(root, 'app/src/main/assets/weather/cloud_patterns.png');
   assert.equal(source.readUInt32BE(16), 4096);
   assert.equal(source.readUInt32BE(20), 2048);
-  assert.equal(crypto.createHash('sha256').update(source).digest('hex'), crypto.createHash('sha256').update(runtime).digest('hex'));
-  console.log(JSON.stringify({ models: manifest.meshes.length, triangles, errors: 0, warnings: 0, atlas: manifest.atlas, runtimeMatchesSource: true }));
+  assert.equal(fs.existsSync(runtime), false);
+  console.log(JSON.stringify({
+    models: manifest.meshes.length,
+    triangles,
+    errors: 0,
+    warnings: 0,
+    atlas: manifest.atlas,
+    artAtlasSha256: crypto.createHash('sha256').update(source).digest('hex'),
+    packaged: false,
+  }));
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
