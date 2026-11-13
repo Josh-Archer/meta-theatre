@@ -676,7 +676,7 @@ private fun WeatherMenu(model: TheatreModel) {
                     .withZone(java.time.ZoneId.systemDefault()).format(reading.time)
                 Text("Model time: $time", color = Muted, fontSize = 26.sp)
             }
-            Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nRain, snow and storms are represented by their cloud shapes.", color = Muted, fontSize = 26.sp)
+            Text("Modeled cloud patterns seen from orbit; not satellite imagery.\nHigh cloud uses modeled layer fractions only. Rain, snow and storms keep their shapes.", color = Muted, fontSize = 26.sp)
             Text("Open-Meteo (open-meteo.com) · CC BY 4.0\nWhen on, viewed coordinates are sent to Open-Meteo. Headset location is optional in Earth settings.", color = Muted, fontSize = 24.sp)
         }
     }

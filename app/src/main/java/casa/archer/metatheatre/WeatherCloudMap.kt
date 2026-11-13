@@ -15,9 +15,10 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
     suspend fun build(snapshot: WeatherSnapshot): Bitmap {
         // Interpolate coarse model readings independently of high-resolution cloud detail.
         // Small fields replace full-resolution float buffers and repeated per-cell map splats.
-        val fields = Array(7) { FloatArray(GRID_W * GRID_H) }
+        // Channel 7 is verified high-cloud weight. It stays 0 when layer fractions are absent.
+        val fields = Array(8) { FloatArray(GRID_W * GRID_H) }
         data class Sample(val x: Double,val y: Double,val z: Double,val cover: Float,val front: Float,val storm: Float,val fog: Float,
-            val windEast: Float, val windNorth: Float)
+            val windEast: Float, val windNorth: Float, val cirrus: Float)
         val samples=snapshot.readings.map { reading ->
             val n=reading.place.normal()
             val pattern=reading.pattern
@@ -30,26 +31,26 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
             Sample(n.x.toDouble(),n.y.toDouble(),n.z.toDouble(),cover,
                 if(pattern==CloudPattern.RAIN_FRONT || pattern==CloudPattern.SNOW_BANDS)1f else 0f,
                 if(pattern==CloudPattern.THUNDERHEAD)1f else 0f,if(pattern==CloudPattern.FOG)1f else 0f,
-                sin(wind).toFloat(), cos(wind).toFloat())
+                sin(wind).toFloat(), cos(wind).toFloat(), reading.highCloudWeight)
         }
         for(y in 0 until GRID_H){
             currentCoroutineContext().ensureActive()
             val lat=Math.PI*(.5-(y+.5)/GRID_H);val cl=cos(lat);val sl=sin(lat)
             for(x in 0 until GRID_W){
                 val lon=Math.PI*(2*(x+.5)/GRID_W-1);val nx=cl*sin(lon);val nz=cl*cos(lon)
-                var weight=0f;var cover=0f;var front=0f;var storm=0f;var fog=0f;var east=0f;var north=0f
+                var weight=0f;var cover=0f;var front=0f;var storm=0f;var fog=0f;var east=0f;var north=0f;var cirrus=0f
                 for(sample in samples){
                     val dot=(nx*sample.x+sl*sample.y+nz*sample.z).coerceIn(-1.0,1.0)
                     if(dot<.88294759)continue
                     val angle=acos(dot)
                     val w=(exp(-angle*angle/.040)*((dot-.88294759)/.05).coerceIn(0.0,1.0)).toFloat()
                     weight+=w;cover+=sample.cover*w;front+=sample.front*w;storm+=sample.storm*w;fog+=sample.fog*w
-                    east+=sample.windEast*w;north+=sample.windNorth*w
+                    east+=sample.windEast*w;north+=sample.windNorth*w;cirrus+=sample.cirrus*w
                 }
                 val i=y*GRID_W+x
                 fields[0][i]=weight.coerceAtMost(1f)
                 if(weight>0){fields[1][i]=cover/weight;fields[2][i]=front/weight;fields[3][i]=storm/weight;fields[4][i]=fog/weight
-                    fields[5][i]=east/weight;fields[6][i]=north/weight}
+                    fields[5][i]=east/weight;fields[6][i]=north/weight;fields[7][i]=cirrus/weight}
             }
         }
         // Write rows directly: an 8K cloud field must not need a second 128 MiB RGBA buffer.
@@ -99,15 +100,22 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
                     val windX = (sx + (field(5) * 14).roundToInt() + structureWidth) % structureWidth
                     val windY = (sy - (field(6) * 14).roundToInt()).coerceIn(0, structureHeight - 1)
                     val stretched = (structure[2][windY * structureWidth + windX].toInt() and 255) / 255f
-                    val shape=cells*(1-front*.8f)+(bands*.6f + stretched*.4f)*front*.8f
+                    val billowShape=cells*(1-front*.8f)+(bands*.6f + stretched*.4f)*front*.8f
+                    // Wind-stretched filaments replace cellular billows only where high cloud was verified.
+                    val cirrus=field(7)
+                    val filament=(bands*.22f + stretched*.78f)*(.30f + erosion*.70f)
+                    val shape=if(cirrus==0f) billowShape else billowShape+(filament-billowShape)*cirrus
                     val threshold=1-cover
                     val edge=((shape-threshold+.045f)/.09f).coerceIn(0f,1f)
                     val envelope=if(cover<=.001f)0f else if(cover>=.999f)1f else edge*edge*(3-2*edge)
                     // Fine optical depth survives fully overcast weather; it never clips to a flat white patch.
-                    val depth=(.28f+.28f*erosion+.42f*old)*(1-fog*.48f)+storm*.12f
+                    val billowDepth=(.28f+.28f*erosion+.42f*old)*(1-fog*.48f)+storm*.12f
+                    val filamentDepth=(.10f+.55f*erosion+.16f*old)*(.72f+.28f*stretched)
+                    val depth=if(cirrus==0f) billowDepth else billowDepth+(filamentDepth-billowDepth)*cirrus
                     val value=(envelope*depth).coerceIn(0f,.98f)
                     val alpha=((old*(1-blend)+value*blend)*255).roundToInt().coerceIn(0,255)
-                    val cloudHeight = (.5f + storm * .45f - fog * .4f).coerceIn(0f,1f)
+                    val baseHeight=.5f + storm * .45f - fog * .4f
+                    val cloudHeight = (if(cirrus==0f) baseHeight else baseHeight + cirrus * .40f).coerceIn(0f,1f)
                     // RGB stores a vertical profile for native shading; alpha retains full-resolution optical depth.
                     // Blend back to the original middle-height deck outside the current model footprint.
                     pixels[x]=Color.argb(alpha,
@@ -123,13 +131,19 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
     companion object {
         private const val GRID_W=128
         private const val GRID_H=64
+        const val WIDTH = 8192
+        const val HEIGHT = 4096
+        const val STRUCTURE_WIDTH = 4096
+        const val STRUCTURE_HEIGHT = 2048
+        /** 8192×4096 alpha plus three 4096×2048 channels. Excludes bitmap and allocator overhead. */
+        const val SOURCE_BYTES = WIDTH * HEIGHT + 3 * STRUCTURE_WIDTH * STRUCTURE_HEIGHT
         fun load(assets: AssetManager): WeatherCloudMap {
             fun decode(path: String)=assets.open(path).use{checkNotNull(BitmapFactory.decodeStream(it))}
             val base=decode("earth/clouds.png")
             val width = base.width; val height = base.height
             val original: ByteArray
             try {
-                check(width==8192 && height==4096)
+                check(width==WIDTH && height==HEIGHT)
                 // Decode a row at a time instead of allocating another full-resolution IntArray.
                 original=ByteArray(width*height)
                 val row=IntArray(width)
@@ -142,7 +156,7 @@ internal class WeatherCloudMap private constructor(private val width: Int, priva
             // structure decode and its 24 MiB channel arrays.
             val pattern=decode("weather/cloud_structure.png")
             try {
-                check(pattern.width==4096 && pattern.height==2048)
+                check(pattern.width==STRUCTURE_WIDTH && pattern.height==STRUCTURE_HEIGHT)
                 val channels=Array(3){ByteArray(pattern.width*pattern.height)};val row=IntArray(pattern.width)
                 for(y in 0 until pattern.height){
                     pattern.getPixels(row,0,pattern.width,0,y,pattern.width,1)

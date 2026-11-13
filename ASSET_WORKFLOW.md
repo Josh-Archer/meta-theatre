@@ -17,6 +17,9 @@ This project is a native Android/Meta Quest app. It loads `.glb` models from
 the source authoring tool; export optimized glTF Binary (`.glb`) models there
 when they are intended for the current app. Keep editable `.blend` files in
 `art/blender/` and any reusable source textures in `art/textures/`.
+The baked phases `earth_{day,night,twilight}.glb` and `weather/cloud_patterns.png`
+are art sources only. Do not copy them back into `app/src/main/assets/`.
+`hull.glb` stays there because the spaceship cabin loads it.
 
 Large assets use Git LFS. Source files use project-relative texture and output
 paths. Execute an authoring script through MCP with its `__file__` set to the
