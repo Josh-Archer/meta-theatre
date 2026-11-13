@@ -43,7 +43,8 @@ class EarthRenderer(private val activity: TheatreActivity) {
     private var surfaceMaterial: SceneMaterial? = null
     private var originalCloudTexture: SceneTexture? = null
     private var weatherTexture: SceneTexture? = null
-    private var weatherMap: WeatherCloudMap? = null
+    private val weatherSources = WeatherCloudCache { WeatherCloudMap.load(activity.assets) }
+    private var weatherPresentation = 0
     private fun pose() = EarthExploration.renderPose(worldFrame, spin)
     internal fun target(): VisitorTarget? = if (entities.size != 3) null else
         VisitorTarget("earth_dynamic_surface.glb", pose(), 1f, RADIUS * 1.012f)
@@ -118,10 +119,18 @@ class EarthRenderer(private val activity: TheatreActivity) {
 
     internal suspend fun setWeather(snapshot: WeatherSnapshot?) {
         val cloud = cloudMaterial ?: return
+        // Null restores the authored cloud texture. Regional fallback uses that path
+        // and keeps the CPU source arrays. Disable bumps [weatherPresentation] so an
+        // in-flight rebuild cannot upload after the user turned weather off.
+        val presentation = weatherPresentation
         val bitmap = if (snapshot == null) null else withContext(Dispatchers.Default) {
-            val map = weatherMap ?: WeatherCloudMap.load(activity.assets).also { weatherMap = it }
-            map.build(snapshot)
+            weatherSources.build(snapshot)
         }
+        if (cloudMaterial == null || presentation != weatherPresentation) {
+            bitmap?.recycle()
+            return
+        }
+        if (snapshot != null && bitmap == null) return
         val next = try {
             bitmap?.let { SceneTexture(it, SamplerConfig(addressModeU = AddressMode.REPEAT, addressModeV = AddressMode.CLAMP_TO_EDGE)) }
         } finally { bitmap?.recycle() }
@@ -163,12 +172,32 @@ class EarthRenderer(private val activity: TheatreActivity) {
         creators.clear()
     }
 
+    /** Drop the 56 MiB morphology and refuse another decode until weather is enabled again. */
+    internal fun releaseWeatherSources() {
+        weatherPresentation += 1
+        val retained = weatherSources.retainsSources
+        weatherSources.releaseForDisable()
+        if (retained) Log.i("Weather", "Released inactive weather source buffers")
+    }
+
+    /** Drop the morphology under memory pressure. The next live rebuild may decode it again. */
+    internal fun evictWeatherSources() {
+        val retained = weatherSources.retainsSources
+        weatherSources.evictForMemoryPressure()
+        if (retained) Log.i("Weather", "Released weather source buffers under memory pressure")
+    }
+
+    internal fun allowWeatherSources() {
+        weatherSources.allowReload()
+    }
+
     /** Called after Spatial SDK shuts down its scene and cached meshes. */
     fun release() {
+        weatherPresentation += 1
         cloudMaterial = null
         surfaceMaterial = null
         weatherTexture?.destroy(); weatherTexture = null
-        weatherMap = null
+        weatherSources.releaseForDisable()
         materials.forEach { it.destroy() }
         textures.forEach { it.destroy() }
         entities.clear()
