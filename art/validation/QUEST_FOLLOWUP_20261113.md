@@ -121,7 +121,10 @@ order. It retains TLS validation, authentication and per-request timeouts. A
 real HTTP regression reaches the fifth distinct connection after four failures,
 without retrying a duplicated address. At 22:03:51 device time, the installed
 app completed discovery with homelab0 selected; it no longer entered the
-unavailable-preferred-server branch. Actual movie playback remains pending.
+unavailable-preferred-server branch. The wearer subsequently confirmed both
+video and audio play from homelab0. After a normal restart at 22:14:26, the
+native log again selected homelab0, restored the saved position and rendered
+a 1920×1080 video frame. This verifies playback beyond the earlier HTTP probe.
 
 The shared panel cursor formerly selected the closest ray anew every frame.
 It now keeps the current input until another hand/controller explicitly presses
@@ -140,3 +143,72 @@ The wearer then held the Roadster in view for a Meta Cam capture. The resulting
 near-plane change did not resolve the defect. ADB display capture stayed black;
 the Meta Cam image is actual headset evidence and stays local. Geometry/native
 material investigation continues; no visual fix is claimed here.
+
+
+## Follow-up: rejected culling test and SDK rendering fix
+
+A temporary material-only test disabled double-sided rendering on the red body.
+The Quest capture still showed stripes, and the wearer reported missing surfaces.
+That experiment was rejected. The runtime GLB was restored byte-for-byte to
+`43a1b830fd334d748e47f2e6460503379318e791304f38dd442e1aba5426280a`,
+and the restored build was installed and verified before further testing. The
+culling experiment is not included in source control.
+
+Read-only inspection in the live Blender session found no closely overlapping
+surface at the sampled hood and flank locations. The sampled runtime hood
+triangles have consistent face/vertex normals. These checks narrow the
+investigation; they do not establish a complete geometry or renderer diagnosis.
+
+[Meta Spatial SDK 0.15.0 release notes](https://developers.meta.com/vr/downloads/package/meta-spatial-sdk/0.15.0/)
+identify a fix for PBR specular banding/flickering. The app now uses 0.15.0 for
+all Spatial SDK modules and the Gradle plugin, including UI Set through the
+shared version catalog. Inspection of the shipped shader sources confirms
+changes to the specular distribution calculation and eye-position precision.
+This is a relevant upstream fix, not proof that it resolves this car's defect.
+
+The app has no authored entity-parent scale hierarchy or physics bodies to
+migrate. Its VRFeature already installs ISDK without the removed IsdkFeature.
+All 288 tests pass against 0.15.0, with zero failures/errors/skips. Debug
+assembly and all custom shader variants compile; lint reports zero errors and
+54 warnings. All 168 packaged runtime assets match the source bytes, including
+the complete two-sided Roadster. The candidate APK SHA-256 is
+`d7f70c849307a46bc81e9e62f5febf7c4619304da84fe3c39939a3d4ff4c5b8e`.
+The in-place install succeeded and the device APK hash matches. At 22:17:17,
+the native Starship diagnostic passed launch, separation, orbit, descent, flip,
+landing and recovery, with unchanged view origin, screen pose and screen size.
+The app was then restarted normally without diagnostic extras. The automated
+capture was black. In the subsequent wearer comparison, the body still had
+stripes or missing surfaces: **the SDK update did not resolve this defect**.
+The existing Plex and shared-pointer fixes are retained; normal launches on
+0.15.0 continued selecting homelab0 and rendering video.
+
+
+Additional local-only rendering probes:
+
+- Disabling lighting on the red paint with `KHR_materials_unlit` still produced
+  holes/stripes according to the wearer. The capture was black, so the exact
+  unlit appearance was not independently visible in that capture.
+- Deinterleaving vertex attributes preserved every accessor value and image
+  byte and passed Khronos validation, but did not fix the defect. The wearer
+  confirmed it, and `roadster-layout-2.jpg` through `roadster-layout-7.jpg`
+  contain actual Quest captures showing the remaining pattern.
+- Source and exported-geometry ray checks found only shared triangle edges at
+  the sampled duplicate hits, not competing body layers. The dense body panels
+  and their second triangles are distributed across the large paint index list.
+- A smaller-draw probe partitions the paint/carbon index lists into at most
+  65,532 entries per draw, preserving the complete binary payload and material
+  values. This changes the Roadster from 10 to 12 primitives; Khronos validation
+  reports zero errors/warnings. Its appearance result remains pending. Installed
+  test APK SHA-256:
+  `8163c7b93a21f08d2a70e8d8770fb2cf176d0523871fc64d0c07743524f02aac`.
+- A separate, **uninstalled** 32-bit-index probe preserves every index value,
+  vertex, image and material. The original Roadster contains 92,379 vertices
+  across primitives with 16-bit local indices. That is valid glTF; an importer
+  must handle any combined vertex offset without overflow. This is an import
+  hypothesis, not an established root cause. The wider-index variant also has
+  zero Khronos validation errors/warnings.
+
+All probe scripts, images and variants remain ignored under
+`playback-20261113/`. The committed runtime GLB and editable Blender source are
+unchanged. No vehicle visual fix, pointer comfort result or sustained frame-rate
+improvement is claimed. The wearer has confirmed Plex video and audio.
