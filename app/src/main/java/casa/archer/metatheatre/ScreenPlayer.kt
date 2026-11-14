@@ -580,7 +580,7 @@ class ScreenPlayer internal constructor(
             }
             reconnectFailed(when (failure) {
                 PlaybackFailure.AUTHORIZATION -> "Plex denied this stream. Reconnect to refresh server access."
-                PlaybackFailure.MISSING -> "This file is unavailable on the Plex server."
+                PlaybackFailure.MISSING -> "File missing on server. Try another library."
                 else -> "Playback failed (${error.errorCodeName}). Choose Reconnect to retry."
             })
             publish()

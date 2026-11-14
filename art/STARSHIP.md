@@ -1,6 +1,9 @@
 # Starship flight exhibit
 
-In **Scenes → Earth orbit**, choose **Launch / replay Starship**. The staged
+Inside Meta Theatre, choose **Recently watched** on the movie controls, then
+**Scenes** along the library's bottom edge. In **Earth orbit**, choose
+**Launch / replay Starship**. This is inside the app, separate from the Quest
+system Home's Scenery menu. The staged
 116-second sequence includes liftoff, separation, a complete Earth orbit,
 belly-first descent, a landing flip, landing burn and tower recovery. **End
 flight** hides it. Playback starts only on request. Launch reframes Earth around

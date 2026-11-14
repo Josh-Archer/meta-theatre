@@ -365,6 +365,7 @@ class TheatreActivity : AppSystemActivity() {
                 mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
                 onPoseSaved = { model.state.saveScreenPose(currentLocation, it) },
+                playbackNeedsAttention = { screenPlayer.transport.value.let { it.canRetry || it.reconnecting } },
             )
             grip = system
             system.screenHidden = model.screenHidden.value

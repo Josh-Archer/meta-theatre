@@ -127,6 +127,40 @@ class PlexRecoveryIntegrationTest {
         } finally { model.release(); screen.release() }
     }
 
+    @Test fun missingMediaKeepsItsExplanationAndExitVisibleWithoutRetryingOrLosingTheBookmark() {
+        val http = MockWebServer().apply { start() }
+        val native = mock(ExoPlayer::class.java)
+        lateinit var listener: Player.Listener
+        doAnswer { listener = it.getArgument(0); null }.`when`(native).addListener(any(Player.Listener::class.java))
+        val screen = ScreenPlayer(context) { _, _, _ -> native }
+        val controls = PlayerAutoHide().apply { setWatching(true, 0); tick(5_000) }
+        try {
+            screen.attach(mock(Surface::class.java))
+            screen.play(Playable("Test", "https://example.invalid/movie.mp4", "https://example.invalid/stream.m3u8", emptyMap()), 42_000)
+            http.enqueue(MockResponse().setResponseCode(404).setBody("private-server-path"))
+            val data = DefaultHttpDataSource.Factory().createDataSource()
+            val failure = try {
+                data.open(DataSpec(android.net.Uri.parse(http.url("/video").toString())))
+                error("Expected HTTP 404")
+            } catch (problem: java.io.IOException) { problem } finally { data.close() }
+            listener.onPlayerError(PlaybackException("private URL", failure, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+            val state = screen.transport.value
+            assertEquals("File missing on server. Try another library.", state.detail)
+            assertEquals(42_000L, state.positionMs)
+            assertEquals("Original", state.playbackMode)
+            assertTrue(state.canRetry)
+            assertFalse(state.reconnecting)
+            controls.tick(60_000, state.canRetry || state.reconnecting)
+            assertTrue(controls.visible)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(8))
+            verify(native, times(1)).prepare()
+            screen.close()
+            controls.setWatching(false, 61_000)
+            controls.tick(70_000, screen.transport.value.canRetry || screen.transport.value.reconnecting)
+            assertFalse(controls.visible)
+        } finally { screen.release(); http.shutdown() }
+    }
+
     @Test fun accountFailureKeepsHistoryAndTokenAndOffersRelinkWhileOfflineFailureOffersReconnect() {
         val plex = mock(PlexClient::class.java)
         `when`(plex.token).thenReturn("synthetic-token")

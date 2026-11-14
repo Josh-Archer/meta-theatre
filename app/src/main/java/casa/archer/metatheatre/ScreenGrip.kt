@@ -67,6 +67,7 @@ internal class ScreenGripSystem(
     private val hasSubtitleCues: () -> Boolean = { false },
     private val onPanelCursor: (PanelCursor?) -> Unit = {},
     private val onPoseSaved: (Pose) -> Unit = {},
+    private val playbackNeedsAttention: () -> Boolean = { false },
 ) : SystemBase() {
     var watching: Boolean = false
         set(value) {
@@ -228,7 +229,7 @@ internal class ScreenGripSystem(
 
     private fun updatePlayerVisibility() {
         val now = SystemClock.uptimeMillis()
-        autoHide.tick(now)
+        autoHide.tick(now, playbackNeedsAttention())
         if (playerOpen != autoHide.visible) {
             playerOpen = autoHide.visible
             slideStartFraction = playerFraction
