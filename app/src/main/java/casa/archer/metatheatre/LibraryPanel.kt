@@ -487,7 +487,8 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.PREV_X),
         ) {}
         SceneControl.entries.forEachIndexed { index, control ->
-            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]), highlighted = control == SceneControl.EARTH) {
+            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]),
+                acceptPointerClick = control == SceneControl.SCENES, highlighted = control == SceneControl.EARTH) {
                 model.sceneControlPress(SceneControls.center(control), .96f)
             }
         }
@@ -629,7 +630,7 @@ private fun ScenePickerMenu(model: TheatreModel) {
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (isSelected) Accent else Zone)
                         .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Ink else Color.Transparent, RoundedCornerShape(16.dp))
-                        .semantics { role = Role.Button; onClick { model.selectLocation(location); true } },
+                        .clickable(role = Role.Button) { model.selectLocation(location) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -650,7 +651,7 @@ private fun ScenePickerMenu(model: TheatreModel) {
             ZoneButton("Reset to default", Modifier.fillMaxHeight().weight(1f)) {
                 model.resetCurrentLocationToDefault()
             }
-            ZoneButton("Back to library", Modifier.fillMaxHeight().weight(1f)) {
+            ZoneButton("Back to library", Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
                 model.closeScenePicker()
             }
         }

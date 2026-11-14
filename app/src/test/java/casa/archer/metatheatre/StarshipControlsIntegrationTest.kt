@@ -34,9 +34,15 @@ class StarshipControlsIntegrationTest {
         val model=TheatreModel(context,player)
         val requests=mutableListOf<Boolean>();var locationChanges=0
         model.onStarshipFlight=requests::add;model.onLocationChanged={locationChanges++}
-        model.openScenePicker()
         compose.setContent { Box(Modifier.requiredSize(1600.dp,900.dp)) { LibraryPanel(model,player) } }
         try {
+            compose.onNodeWithText("Scenes").assertIsDisplayed().performClick()
+            val cabin = TheatreLocation.entries.first { it != TheatreLocation.EARTH_ORBIT }
+            compose.onNodeWithText(cabin.title).performClick()
+            compose.runOnIdle { assertEquals(cabin, model.currentLocation.value) }
+            compose.onNodeWithText(TheatreLocation.EARTH_ORBIT.title).performClick()
+            compose.runOnIdle { assertEquals(TheatreLocation.EARTH_ORBIT, model.currentLocation.value) }
+            val selections = locationChanges
             val rect=compose.onNodeWithText("Launch / replay Starship").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             val root=compose.onRoot().fetchSemanticsNode().boundsInRoot
             compose.runOnIdle {
@@ -50,8 +56,10 @@ class StarshipControlsIntegrationTest {
                 model.starshipFlight(true)
             }
             assertEquals(listOf(true,false),requests)
-            assertEquals(0,locationChanges)
+            assertEquals(selections,locationChanges)
             assertEquals("Select Earth orbit, then launch",model.starshipStatus.value)
+            compose.onNodeWithText("Back to library").performClick()
+            compose.onNodeWithText("Scenes").assertIsDisplayed()
         } finally { compose.runOnIdle { model.release() } }
     }
 }
