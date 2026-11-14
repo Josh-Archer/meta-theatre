@@ -27,7 +27,7 @@ internal class EarthSpinGesture {
         }
         var hover: VisitorHit? = null
         if (!blocked && earth != null) for (pointer in pointers) {
-            if (pointer.id in visitorOwned) continue
+            if (!pointer.allowAction || pointer.id in visitorOwned) continue
             val hit = ScenePointer.hit(pointer, earth) ?: continue
             if (hover == null || hit.distance < hover.distance) hover = hit
             if (grab == null && pointer.down && previous[pointer.id] == false) {

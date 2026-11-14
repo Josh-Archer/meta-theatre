@@ -170,4 +170,16 @@ class VisitorInspectionIntegrationTest {
             assertTrue(target.asset in inspection.overrides)
         }
     }
+    @Test fun inactiveHandCannotHoverOrGrabUntilAFreshOwnedPinch() {
+        val target = target(SpaceVisitors.roadster)
+        val inspection = VisitorInspection()
+        val inactive = pointer(target, id = 2).copy(allowAction = false)
+        assertNull(inspection.update(listOf(inactive), listOf(target), viewer, 0).hover)
+        assertTrue(inspection.update(listOf(inactive.copy(down = true)), listOf(target), viewer, 10).owned.isEmpty())
+        val acquired = inactive.copy(down = true, allowAction = true)
+        assertTrue(inspection.update(listOf(acquired), listOf(target), viewer, 20).owned.isEmpty())
+        inspection.update(listOf(acquired.copy(down = false)), listOf(target), viewer, 30)
+        assertEquals(setOf(2L), inspection.update(listOf(acquired), listOf(target), viewer, 40).owned)
+    }
+
 }

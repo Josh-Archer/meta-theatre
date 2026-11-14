@@ -118,6 +118,8 @@ class TheatreModel(
     private var activeJellyfin: ActiveJellyfin? = null
     val page = MutableStateFlow(0)
     val playerControlsOpen = MutableStateFlow(false)
+    val playerSettingsOpen = MutableStateFlow(false)
+    internal val playerPressedTarget = MutableStateFlow<PlayerTarget?>(null)
     val librarySearchQuery = MutableStateFlow("")
     val librarySearchFilter = MutableStateFlow(LibrarySearchFilter.ALL)
     val librarySearchKeyboardOpen = MutableStateFlow(false)
@@ -1047,6 +1049,7 @@ class TheatreModel(
             PlayerControl.HD -> player.setQuality(PlaybackQuality.HD)
             PlayerControl.AUDIO -> player.cycleAudio()
             PlayerControl.SUBTITLES -> player.cycleSubtitles()
+            PlayerControl.SETTINGS -> playerSettingsOpen.value = !playerSettingsOpen.value
             PlayerControl.QUIET -> toggleQuietCinema()
             PlayerControl.EARTH -> openEarthControls()
             PlayerControl.RECONNECT -> reconnectPlex()

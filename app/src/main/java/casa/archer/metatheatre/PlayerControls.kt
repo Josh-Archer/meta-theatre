@@ -3,7 +3,7 @@ package casa.archer.metatheatre
 internal enum class PlayerControl(val label: String) {
     BACK("−10s"), TOGGLE("Play"), FORWARD("+10s"), FORWARD_MORE("+30s"), LIBRARY("Library"),
     SMALLER("Smaller"), LARGER("Larger"), ORIGINAL("Original"), UHD("4K"), HD("1080p"),
-    AUDIO("Audio"), SUBTITLES("Subtitles"), QUIET("Quiet cinema"), EARTH("Explore Earth"), RECONNECT("Reconnect"),
+    AUDIO("Audio"), SUBTITLES("Subtitles"), SETTINGS("Settings"), QUIET("Quiet cinema"), EARTH("Explore Earth"), RECONNECT("Reconnect"),
 }
 
 internal sealed interface PlayerTarget {
@@ -19,18 +19,31 @@ internal data class PlayerHitRect(val left: Float, val top: Float, val right: Fl
 /** Bounds come from the rendered Compose layout, so ray selection follows the visible buttons. */
 internal class PlayerHitTargets {
     private val bounds = mutableMapOf<PlayerTarget, PlayerHitRect>()
-    @Synchronized fun put(target: PlayerTarget, rect: PlayerHitRect) { bounds[target] = rect }
+    private var seekTrack: PlayerHitRect? = null
+    @Synchronized fun put(target: PlayerTarget, rect: PlayerHitRect, horizontalInset: Float = 0f) {
+        bounds[target] = rect
+        if (target == PlayerTarget.Seek) seekTrack = rect.copy(left = rect.left + horizontalInset, right = rect.right - horizontalInset)
+    }
     @Synchronized fun at(x: Float, y: Float): PlayerTarget? = bounds.entries.firstOrNull { it.value.contains(x, y) }?.key
-    @Synchronized fun seekFraction(x: Float): Float? = bounds[PlayerTarget.Seek]?.fraction(x)
-    @Synchronized fun clear() { bounds.clear() }
+    @Synchronized fun seekFraction(x: Float): Float? = seekTrack?.fraction(x)
+    @Synchronized fun clear() { bounds.clear(); seekTrack = null }
+    @Synchronized fun remove(target: PlayerTarget) { bounds.remove(target); if (target == PlayerTarget.Seek) seekTrack = null }
 }
 
-internal data class SideRailPlacement(val right: Float, val up: Float) {
+/** Full transparent panel with controls anchored inside the movie's lower edge. */
+internal data class PlayerPlacement(val width: Float, val height: Float, val up: Float) {
+    fun contentHeight(expanded: Boolean) = height * if (expanded) 1f else COMPACT_DP / HEIGHT_DP
+    fun contentUp(expanded: Boolean) = up - (height - contentHeight(expanded)) * .5f
+    fun contains(y: Float, expanded: Boolean) = y in (if (expanded) 0f else 1f - COMPACT_DP / HEIGHT_DP)..1f
     companion object {
-        fun beside(screen: ScreenSize) = SideRailPlacement(
-            right = screen.width * 0.5f + Stage.PLAYER_GAP + Stage.PLAYER_WIDTH * 0.5f,
-            up = -screen.height * 0.5f + Stage.PLAYER_HEIGHT * 0.5f,
-        )
+        const val WIDTH_DP = 960f
+        const val HEIGHT_DP = 640f
+        const val COMPACT_DP = 240f
+        fun inside(screen: ScreenSize): PlayerPlacement {
+            val width = minOf(screen.width * .9f, 2.8f, screen.height * .84f * WIDTH_DP / HEIGHT_DP)
+            val height = width * HEIGHT_DP / WIDTH_DP
+            return PlayerPlacement(width, height, -screen.height * .46f + height * .5f)
+        }
     }
 }
 

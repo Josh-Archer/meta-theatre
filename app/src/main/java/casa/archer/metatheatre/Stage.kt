@@ -1,10 +1,9 @@
 package casa.archer.metatheatre
 
-/** Physical spacing for the video and its independent side controls. */
+/** Physical spacing for video and its attached controls. */
 internal object Stage {
-    const val PLAYER_WIDTH = 0.84f
-    const val PLAYER_HEIGHT = 2.0f
-    const val PLAYER_GAP = 0.10f
+    const val PLAYER_WIDTH = 2.8f
+    const val PLAYER_HEIGHT = PLAYER_WIDTH * PlayerPlacement.HEIGHT_DP / PlayerPlacement.WIDTH_DP
     const val PLAYER_SLIDE = 0.20f
     const val VIDEO_FORWARD = 0.05f
     const val PLAYER_FORWARD = 0.09f

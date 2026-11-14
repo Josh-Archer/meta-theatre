@@ -10,6 +10,7 @@ internal data class HandInput(
     val y: Float,
     val z: Float,
     val onVideo: Boolean,
+    val allowAction: Boolean = true,
 )
 
 internal data class HandActions(
@@ -48,7 +49,7 @@ internal class MovieHandGestures {
             if (pinch != null) {
                 pinch.travel = maxOf(pinch.travel, distance(pinch.start, hand))
                 if (!hand.pinching) {
-                    if (!pinch.consumed && hand.onVideo && nowMs - pinch.startedMs <= TAP_MS && pinch.travel < TAP_TRAVEL) {
+                    if (!pinch.consumed && pinch.start.allowAction && hand.allowAction && hand.onVideo && nowMs - pinch.startedMs <= TAP_MS && pinch.travel < TAP_TRAVEL) {
                         taps.add(hand.id)
                     }
                     pinches.remove(hand.id)
@@ -84,7 +85,7 @@ internal class MovieHandGestures {
         }
         for ((id, pinch) in pinches) {
             val hand = tracked.getValue(id)
-            if (!allowSeek || pinch.consumed || !hand.pinching) continue
+            if (!allowSeek || !pinch.start.allowAction || !hand.allowAction || pinch.consumed || !hand.pinching) continue
             val dx = hand.x - pinch.start.x
             val dy = hand.y - pinch.start.y
             val dz = hand.z - pinch.start.z

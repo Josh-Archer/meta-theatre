@@ -104,11 +104,16 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
         }
     }
 
+    private fun pointerTargets() = entries.filter { it.visible && it.returning == null }.map { entry ->
+        VisitorTarget(entry.visitor.asset, entry.entity.getComponent<Transform>().transform,
+            entry.entity.getComponent<Scale>().scale.x, radius(entry.visitor))
+    }
+
+    fun pointerHit(pointer: VisitorPointer): VisitorHit? = if (elapsedClock.isPaused) null else
+        pointerTargets().mapNotNull { ScenePointer.hit(pointer, it) }.minByOrNull { it.distance }
+
     fun interact(pointers: List<VisitorPointer>, viewer: Pose, now: Long, blocked: Boolean): VisitorInputResult {
-        val targets = entries.filter { it.visible && it.returning == null }.map { entry ->
-            VisitorTarget(entry.visitor.asset, entry.entity.getComponent<Transform>().transform,
-                entry.entity.getComponent<Scale>().scale.x, radius(entry.visitor))
-        }
+        val targets = pointerTargets()
         val result = inspection.update(pointers, targets, viewer, now, blocked || elapsedClock.isPaused)
         result.returned.forEach { startReturn(it.target, it.velocity) }
         return result

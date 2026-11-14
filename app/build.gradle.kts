@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "casa.archer.metatheatre"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
@@ -78,6 +78,8 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.material3)
+    implementation(platform(libs.metavrx.bom))
+    implementation(libs.metavrx.uiset.compose)
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)

@@ -27,4 +27,18 @@ class CursorFocusTest {
         assertNull(focus.update(emptyList(), 260))
         assertNull(focus.update(listOf(left.copy(distance = Float.NaN)), 300))
     }
+    @Test fun selectionIsCapturedAcrossOtherHandPinchesAndLeavingThePanel() {
+        val focus = CursorFocus()
+        val left = CursorCandidate(1, 2f, false, false)
+        val right = CursorCandidate(2, 2.1f, false, false)
+        focus.update(listOf(left, right), 0)
+        assertEquals(1L, focus.update(listOf(left.copy(pressed = true, down = true), right), 10))
+        assertEquals(1L, focus.update(listOf(left.copy(distance = Float.POSITIVE_INFINITY, down = true),
+            right.copy(pressed = true, down = true)), 20))
+        // The original owner must receive its release, even if the other hand presses then.
+        assertEquals(1L, focus.update(listOf(left, right.copy(pressed = true, down = true)), 30))
+        assertEquals(1L, focus.update(listOf(left, right.copy(down = true)), 40))
+        assertEquals(2L, focus.update(listOf(left, right.copy(pressed = true, down = true)), 60))
+    }
+
 }

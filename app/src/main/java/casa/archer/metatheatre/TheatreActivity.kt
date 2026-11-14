@@ -20,6 +20,7 @@ import com.meta.spatial.isdk.IsdkGrabbable
 import com.meta.spatial.isdk.IsdkPanelDimensions
 import com.meta.spatial.isdk.IsdkPanelGrabHandle
 import com.meta.spatial.isdk.IsdkPanelResize
+import com.meta.spatial.isdk.IsdkDefaultCursorSystem
 import com.meta.spatial.isdk.IsdkSystem
 import com.meta.spatial.isdk.ResizeMode
 import com.meta.spatial.runtime.ReferenceSpace
@@ -104,6 +105,7 @@ class TheatreActivity : AppSystemActivity() {
             },
             center = { place ->
                 grip?.cancelEarthGrab()
+                grip?.suspendInput()
                 spaceVisitorRenderer?.cancelGrab()
                 earthExploration.viewLocation(place, scene.getViewerPose())
                 syncEarthView()
@@ -199,6 +201,7 @@ class TheatreActivity : AppSystemActivity() {
         model.onEarthZoom = { control ->
             if (immersiveFocused) {
                 grip?.cancelEarthGrab()
+                grip?.suspendInput()
                 spaceVisitorRenderer?.cancelGrab()
                 val viewer = scene.getViewerPose()
                 val before = earthExploration.zoom
@@ -371,7 +374,9 @@ class TheatreActivity : AppSystemActivity() {
                 mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
                 onPoseSaved = { model.state.saveScreenPose(currentLocation, it) },
-                playbackNeedsAttention = { screenPlayer.transport.value.let { it.canRetry || it.reconnecting } },
+                playbackNeedsAttention = { model.playerSettingsOpen.value || screenPlayer.transport.value.let { it.canRetry || it.reconnecting || !it.playWhenReady } },
+                playerSettingsOpen = { model.playerSettingsOpen.value },
+                onPlayerPressed = { model.playerPressedTarget.value = it },
             )
             grip = system
             system.screenHidden = model.screenHidden.value
@@ -384,6 +389,9 @@ class TheatreActivity : AppSystemActivity() {
                 it.setScenePointerDistance(15f)
             }
         }
+        // ScreenGrip owns the shared pointer. Rendering ISDK's per-hand cursors as
+        // well gives two competing pointers; its grab/resize systems remain active.
+        systemManager.findSystem<IsdkDefaultCursorSystem>().enableInput(false)
         Log.i(TAG, "theatre screen spawned")
         deviceLocation.setActive(immersiveFocused)
         model.sceneReady()
@@ -669,6 +677,7 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSessionStateChanged(state: SessionState) {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
+        if (isdkSystem != null) systemManager.findSystem<IsdkDefaultCursorSystem>().enableInput(false)
         starshipRenderer?.setPaused(quietCinema.active || !immersiveFocused)
         deviceLocation.setActive(immersiveFocused && screen != null)
         weather.setActive(immersiveFocused && !model.clearEarth.value)
@@ -678,6 +687,7 @@ class TheatreActivity : AppSystemActivity() {
             locomotionTargets?.show(false)
             spaceVisitorRenderer?.cancelGrab()
             grip?.cancelEarthGrab()
+            grip?.suspendInput()
         }
         // Resample civil time immediately after focus/visibility changes, including headset wake.
         updateSolarEnvironment(force = true)
@@ -837,8 +847,8 @@ class TheatreActivity : AppSystemActivity() {
                         }
                     },
                     display = DpDisplayOptions(
-                        width = 560f,
-                        height = 1640f,
+                        width = PlayerPlacement.WIDTH_DP,
+                        height = PlayerPlacement.HEIGHT_DP,
                         dpi = 160,
                     ),
                     rendering = UIPanelRenderOptions(PanelRenderMode.Mesh()),
@@ -1097,8 +1107,12 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun onMoviePress() {
-        Log.i(TAG, "video toggle")
-        model.togglePlayback()
+        if (!model.playerControlsOpen.value) {
+            model.playerInteraction()
+        } else {
+            Log.i(TAG, "video toggle")
+            model.togglePlayback()
+        }
     }
 
     private fun onHeaderPress(x: Float) {

@@ -8,7 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.*
@@ -37,11 +38,11 @@ class StarshipControlsIntegrationTest {
         model.onRoadsterReplay={roadsterReplays++}
         compose.setContent { Box(Modifier.requiredSize(1600.dp,900.dp)) { LibraryPanel(model,player) } }
         try {
-            compose.onNodeWithText("Scenes").assertIsDisplayed().performClick()
+            compose.onNodeWithText("Scenes").assertIsDisplayed().performSemanticsAction(SemanticsActions.OnClick) { it() }
             val cabin = TheatreLocation.entries.first { it != TheatreLocation.EARTH_ORBIT }
-            compose.onNodeWithText(cabin.title).performClick()
+            compose.onNodeWithText(cabin.title).performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.runOnIdle { assertEquals(cabin, model.currentLocation.value) }
-            compose.onNodeWithText(TheatreLocation.EARTH_ORBIT.title).performClick()
+            compose.onNodeWithText(TheatreLocation.EARTH_ORBIT.title).performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.runOnIdle { assertEquals(TheatreLocation.EARTH_ORBIT, model.currentLocation.value) }
             val selections = locationChanges
             val rect=compose.onNodeWithText("Launch / replay Starship").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
@@ -50,14 +51,14 @@ class StarshipControlsIntegrationTest {
                 assertTrue(model.scenePickerPress((rect.center.x-root.left)/root.width,(rect.center.y-root.top)/root.height))
             }
             assertEquals(listOf(true),requests)
-            compose.onNodeWithText("End flight").performClick()
+            compose.onNodeWithText("End flight").performSemanticsAction(SemanticsActions.OnClick) { it() }
             assertEquals(listOf(true,false),requests)
             val roadster=compose.onNodeWithText("Show / replay Roadster").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             compose.runOnIdle {
                 assertTrue(model.scenePickerPress((roadster.center.x-root.left)/root.width,(roadster.center.y-root.top)/root.height))
             }
             assertEquals(1,roadsterReplays)
-            compose.onNodeWithText("Show / replay Roadster").performClick()
+            compose.onNodeWithText("Show / replay Roadster").performSemanticsAction(SemanticsActions.OnClick) { it() }
             assertEquals(2,roadsterReplays)
             compose.runOnIdle {
                 model.currentLocation.value=TheatreLocation.entries.first { it != TheatreLocation.EARTH_ORBIT }
@@ -68,7 +69,7 @@ class StarshipControlsIntegrationTest {
             assertEquals(listOf(true,false),requests)
             assertEquals(selections,locationChanges)
             assertEquals("Select Earth orbit, then launch",model.starshipStatus.value)
-            compose.onNodeWithText("Back to library").performClick()
+            compose.onNodeWithText("Back to library").performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.onNodeWithText("Scenes").assertIsDisplayed()
         } finally { compose.runOnIdle { model.release() } }
     }

@@ -89,4 +89,12 @@ class EarthSpinIntegrationTest {
             assertTrue("$control should follow the hand to the right", afterPoint.x > hit.point.x)
         }
     }
+    @Test fun unownedHandCannotStartAGlobeDrag() {
+        val gesture = EarthSpinGesture()
+        val inactive = hand().copy(allowAction = false)
+        assertNull(gesture.update(listOf(inactive), globe, viewer, false, emptySet()).hover)
+        assertTrue(gesture.update(listOf(inactive.copy(down = true)), globe, viewer, false, emptySet()).owned.isEmpty())
+        assertTrue(gesture.update(listOf(inactive.copy(down = true, allowAction = true)), globe, viewer, false, emptySet()).owned.isEmpty())
+    }
+
 }

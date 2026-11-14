@@ -198,17 +198,80 @@ Additional local-only rendering probes:
 - A smaller-draw probe partitions the paint/carbon index lists into at most
   65,532 entries per draw, preserving the complete binary payload and material
   values. This changes the Roadster from 10 to 12 primitives; Khronos validation
-  reports zero errors/warnings. Its appearance result remains pending. Installed
-  test APK SHA-256:
+  reports zero errors/warnings. The wearer subsequently reported that the
+  Roadster still looked the same, so this probe did not resolve it. Test APK SHA-256:
   `8163c7b93a21f08d2a70e8d8770fb2cf176d0523871fc64d0c07743524f02aac`.
-- A separate, **uninstalled** 32-bit-index probe preserves every index value,
+- A separate 32-bit-index probe preserves every index value,
   vertex, image and material. The original Roadster contains 92,379 vertices
   across primitives with 16-bit local indices. That is valid glTF; an importer
   must handle any combined vertex offset without overflow. This is an import
   hypothesis, not an established root cause. The wider-index variant also has
-  zero Khronos validation errors/warnings.
+  zero Khronos validation errors/warnings. It was later installed with the
+  attached playback controls; its wearer comparison remains pending.
 
 All probe scripts, images and variants remain ignored under
 `playback-20261113/`. The committed runtime GLB and editable Blender source are
-unchanged. No vehicle visual fix, pointer comfort result or sustained frame-rate
-improvement is claimed. The wearer has confirmed Plex video and audio.
+unchanged. No vehicle visual fix or sustained frame-rate improvement is claimed.
+The wearer has confirmed Plex video and audio. Later pointer and controls results
+are recorded below.
+
+
+## Follow-up: movie-attached controls and shared input ownership
+
+The movie now has compact controls inside its lower edge, with expandable screen,
+quality and scene settings. Audio/subtitle selection, original quality, seeking,
+reconnect and library navigation retain the real player path. Layout scales with
+the screen. Hit areas come from Compose bounds, and seeking accounts for the UI
+Set slider thumb insets. The empty upper area of the collapsed panel stays clear.
+
+The panel uses the current [Meta VR UI Set](https://developers.meta.com/vr/documentation/android-apps/meta-vr-ui-set-sdk/),
+via MetaVRX BOM 1.2026.1.0 and uiset-compose-compat 1.0.0. Compose moves to 1.8.0
+and compileSdk to 35; target/minSdk remain 34. Spatial SDK remains 0.15.0.
+Native LabelButton, Slider, typography, dimensions and interaction feedback are
+used, with the theme's supported surface-color customization.
+
+One hand/controller now owns the actual actions as well as the visible cursor.
+A held press retains ownership through leaving a panel and its release frame.
+The secondary hand cannot dispatch a click, seek, scroll or scene grab. Both
+hands still participate in two-hand resizing. Native per-hand touch activation
+is consumed at the Compose root to avoid a second activation path; accessibility
+semantics remain available. The SDK's duplicate cursor rendering is disabled,
+while its grabbing/resizing systems remain enabled. Focus loss clears input.
+
+The wearer confirmed **controls work and the pointer is stable with both hands**
+on the first attached-controls build. They then reported that pointing away from
+the controls paused playback, and that the panel lacked the translucent Quest
+appearance. The log supports the pause diagnosis: at 15:00:13.247, 18.579 and
+20.946, a Play/Pause button action was followed about 0.9 seconds later by
+`stop palm paused media`. Playback had selected homelab0 and rendered a frame.
+
+The follow-up disarms stop-palm pause while controls are visible, including the
+fade-out. After they hide, hands must be lowered for at least 300 ms before a
+fresh held stop palm can pause. A brief tracking dropout does not rearm it.
+Explicit Play/Pause remains available throughout. The panel's opaque backing
+mesh is removed; its surface now uses a translucent dark gradient and thin edge,
+with opaque text and normal UI Set component feedback. No full-screen blur or
+additional scene render pass is introduced. The library backing is retained.
+
+Validation of this follow-up:
+
+- **295 JVM/Robolectric tests pass**, zero failures/errors/skips. Assembly and
+  shader compilation pass; lint has zero errors and 54 warnings.
+- Gesture regression covers Play, relaxing the pointing hand, leaving controls,
+  auto-hide, brief tracking loss, and a subsequent deliberate stop palm.
+- Native Compose rendering over black and white movie fixtures verifies that
+  background pixels pass through the actual control surface. Layout tests check
+  readable labels, no overlap, measured ray actions, compact settings removal,
+  and that native per-hand touches cannot duplicate actions. UI fixture renders
+  were inspected locally; they are not Quest captures.
+- Canonical source-assets APK SHA-256:
+  `10c7e54e74d9a6057e07335e066186904b60f52f9d960e762f287d8ead0d88ae`.
+- The installed build keeps the **local-only 32-bit Roadster diagnostic** to
+  preserve the pending comparison. Installed/local APK SHA-256:
+  `d8fddfbc9fe2ca6caecf683928cf5c5797a090fab9b0792a836571b777fd20fa`.
+  The source-controlled Roadster remains the canonical byte-exact asset.
+
+The updated pause behavior, translucent surface in the headset and 32-bit
+Roadster appearance still require wearer comparison. The earlier input result
+is not presented as acceptance of these later changes. Raw logs, APK variants
+and UI images remain ignored under `playback-20261113/`.

@@ -71,7 +71,7 @@ fun LibraryPanel(model: TheatreModel, player: ScreenPlayer) {
     val libraryOpen by model.libraryOpen.collectAsState()
     val hidden by model.screenHidden.collectAsState()
     SpatialTheme(colorScheme = darkSpatialColorScheme()) {
-      Box(Modifier.fillMaxSize()) {
+      Box(Modifier.fillMaxSize().ownedRayInput()) {
         LibraryContent(model, player)
         PanelReticle(model, PointerPanel.LIBRARY, libraryOpen && !hidden)
       }

@@ -17,7 +17,7 @@ import com.meta.spatial.uiset.theme.SpatialShapes
 internal class PanelBackingRenderer(private val activity: TheatreActivity) {
     private val materials = mutableListOf<SceneMaterial>()
     fun create() {
-        for ((name, dimensions) in listOf("library" to Size(1600f, 900f), "player" to Size(560f, 1640f))) {
+        for ((name, dimensions) in listOf("library" to Size(1600f, 900f))) {
             val radius = SpatialShapes().large.topStart.toPx(dimensions, Density(1f))
             val material = SceneMaterial.custom("panel_backing", arrayOf(
                 SceneMaterialAttribute("corner", SceneMaterialDataType.Vector4)), AlphaMode.OPAQUE).apply {
@@ -32,7 +32,6 @@ internal class PanelBackingRenderer(private val activity: TheatreActivity) {
     }
     fun unregister() {
         activity.unregisterMeshCreator("mesh://horizon_library")
-        activity.unregisterMeshCreator("mesh://horizon_player")
     }
     fun release() { materials.forEach { it.destroy() }; materials.clear() }
 }
