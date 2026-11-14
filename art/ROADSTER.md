@@ -1,6 +1,14 @@
 # Modern Roadster and Starman — October 9, 2026
 
-Current runtime update: see [the November 11 material and performance pass](validation/REALISM_PERFORMANCE_20261111.md) for the refined materials, versioned Blender source, current asset costs, matched renders, and validation limits. The original authoring record below is preserved.
+Current runtime update: see [the November 13 finish validation](validation/STARSHIP_20261113.md).
+The paint is a deeper red with softer clearcoat, the glass/visor uses dielectric
+reflection, and fine surface normals are subdued in the pixels. Geometry,
+placement and texture resolutions are preserved. The editable source is
+`blender/space_roadster_finish_20261113.blend`; `exports/flybys/space_roadster.glb`
+and the runtime GLB match `exports/starship_20261113/space_roadster.glb`.
+The older FBX and the original authoring record below are historical; the new
+Unreal review imports the revised GLB. The [November 11 pass](validation/REALISM_PERFORMANCE_20261111.md)
+is the comparison baseline.
 
 The runtime Roadster now follows the modern red design in the user's supplied
 photograph. It was authored, inspected and rendered through the live Blender MCP

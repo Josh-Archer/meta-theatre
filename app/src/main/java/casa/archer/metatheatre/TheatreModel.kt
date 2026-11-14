@@ -130,6 +130,8 @@ class TheatreModel(
 
     var onViewTurn: ((Float) -> Unit)? = null
     var onVisitorsReturn: (() -> Unit)? = null
+    internal var onStarshipFlight: ((Boolean) -> Unit)? = null
+    val starshipStatus = MutableStateFlow("Takeoff · orbit · landing")
     internal var onEarthControl: ((EarthControl) -> Unit)? = null
     val earthControlsOpen = MutableStateFlow(false)
     val earthViewLabel = MutableStateFlow("Equator")
@@ -208,6 +210,7 @@ class TheatreModel(
         onWatching = null
         onViewTurn = null
         onVisitorsReturn = null
+        onStarshipFlight = null
         onEarthControl = null
         onLocationChanged = null
         onResetSceneSettings = null
@@ -678,9 +681,19 @@ class TheatreModel(
             is ScenePickerAction.SelectLocation -> selectLocation(action.location)
             ScenePickerAction.ResetDefault -> resetCurrentLocationToDefault()
             ScenePickerAction.Done -> closeScenePicker()
+            ScenePickerAction.LaunchStarship -> starshipFlight(true)
+            ScenePickerAction.StopStarship -> starshipFlight(false)
             null -> Unit
         }
         return true
+    }
+
+    fun starshipFlight(start: Boolean) {
+        if (start && currentLocation.value != TheatreLocation.EARTH_ORBIT) {
+            starshipStatus.value = "Select Earth orbit, then launch"
+            return
+        }
+        onStarshipFlight?.invoke(start)
     }
 
     private var earthReturnToPlayer = false
