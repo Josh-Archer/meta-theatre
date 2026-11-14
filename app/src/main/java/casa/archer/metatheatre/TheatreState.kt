@@ -205,6 +205,6 @@ private fun poseFromJson(json: JSONObject, default: Pose): Pose = runCatching {
     val qw = json.optDouble("qw", default.q.w.toDouble()).toFloat()
     if (tx.isFinite() && ty.isFinite() && tz.isFinite() &&
         qx.isFinite() && qy.isFinite() && qz.isFinite() && qw.isFinite()) {
-        Pose(Vector3(tx, ty, tz), Quaternion(qx, qy, qz, qw))
+        Pose(Vector3(tx, ty, tz), Quaternion(w = qw, x = qx, y = qy, z = qz))
     } else default
 }.getOrDefault(default)

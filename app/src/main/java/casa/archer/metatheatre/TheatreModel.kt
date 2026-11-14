@@ -183,6 +183,7 @@ class TheatreModel(
     init {
         player.onProgress = { position, duration, ended -> checkpoint(position, duration, ended) }
         player.onReconnect = ::refreshPlaybackConnection
+        player.onFileUnavailable = ::returnFromUnavailableFile
     }
 
     fun start() {
@@ -204,6 +205,7 @@ class TheatreModel(
         cancelBrowseWork()
         player.onProgress = null
         player.onReconnect = null
+        player.onFileUnavailable = null
         scope.cancel()
         panelCursor.value = null
         onPrepareScreen = null
@@ -890,6 +892,14 @@ class TheatreModel(
         if (servers.size == 1) openServer(servers.first())
     }
 
+    private fun returnFromUnavailableFile(message: String) {
+        closeToHome()
+        if (servers.size > 1) show(Browse.Servers(servers), replace = true)
+        error.value = message
+        plexReconnectAvailable.value = false
+        plexLinkRequired.value = false
+    }
+
     fun sceneReady() {
         if (!libraryOpen.value && player.transport.value.title.isNotBlank()) {
             onPrepareScreen?.invoke()
@@ -971,6 +981,10 @@ class TheatreModel(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (problem: Exception) {
                 if (activeMovie != key) return@launch
+                if ((problem as? PlexException)?.failure == PlexFailure.MISSING) {
+                    returnFromUnavailableFile(problem.message.orEmpty())
+                    return@launch
+                }
                 plexLinkRequired.value = (problem as? PlexException)?.failure == PlexFailure.ACCOUNT_AUTH
                 player.reconnectFailed((problem as? PlexException)?.message ?: "Couldn't reconnect. Your progress is saved.")
             }
@@ -1036,7 +1050,13 @@ class TheatreModel(
     private fun play(server: PlexServer, item: PlexItem) {
         reconnectJob?.cancel()
         launch("Couldn't play ${item.title}") { generation ->
-            val playable = withContext(ioDispatcher) { plex.playable(server, item) }
+            val playable = try {
+                withContext(ioDispatcher) { plex.playable(server, item) }
+            } catch (problem: PlexException) {
+                if (problem.failure != PlexFailure.MISSING) throw problem
+                if (isCurrentWork(generation)) returnFromUnavailableFile(problem.message.orEmpty())
+                return@launch
+            }
             if (!isCurrentWork(generation)) return@launch
             saveCheckpoint()
             val key = MovieKey(server.id, item.ratingKey)

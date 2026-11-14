@@ -63,7 +63,7 @@ data class PlexPlaybackStream(
     val selected: Boolean = false,
 )
 
-enum class PlexFailure { ACCOUNT_AUTH, SERVER_AUTH, CONNECTION, SERVER, OTHER }
+enum class PlexFailure { ACCOUNT_AUTH, SERVER_AUTH, CONNECTION, SERVER, MISSING, OTHER }
 class PlexException(message: String, val failure: PlexFailure = PlexFailure.OTHER) : Exception(message)
 
 /**
@@ -213,7 +213,7 @@ class PlexClient(context: Context, private val accountEndpoint: String = PLEX) {
     fun playable(server: PlexServer, item: PlexItem): Playable {
         val body = request(
             "GET",
-            "${server.uri.trimEnd('/')}/library/metadata/${item.ratingKey}",
+            "${server.uri.trimEnd('/')}/library/metadata/${item.ratingKey}?checkFiles=1",
             server.token,
         )
         val metadata = array(JSONObject(body).getJSONObject("MediaContainer"), "Metadata")
@@ -230,6 +230,11 @@ class PlexClient(context: Context, private val accountEndpoint: String = PLEX) {
         val version = preferredMovieVersion(versions) ?: throw PlexException("${item.title} has no file")
         val part = array(media.getJSONObject(version.index), "Part")
         if (part.length() == 0) throw PlexException("${item.title} has no file")
+        val selectedPart = part.getJSONObject(0)
+        if (listOf("exists", "accessible").any { selectedPart.has(it) && !selectedPart.isNull(it) &&
+                !selectedPart.optBoolean(it, true) }) {
+            throw PlexException("File unavailable on ${server.name}. Choose another library.", PlexFailure.MISSING)
+        }
         val key = part.getJSONObject(0).optString("key")
         if (key.isBlank()) throw PlexException("${item.title} has no file")
         val streams = array(part.getJSONObject(0), "Stream")

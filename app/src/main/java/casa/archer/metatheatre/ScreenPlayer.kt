@@ -83,6 +83,7 @@ class ScreenPlayer internal constructor(
     private var reconnectAttempts = 0
     private var healthySinceMs = 0L
     internal var onReconnect: (() -> Unit)? = null
+    internal var onFileUnavailable: ((String) -> Unit)? = null
     @Volatile private var lastColorLabel = ""
     @Volatile private var playbackGeneration = 0
 
@@ -584,6 +585,9 @@ class ScreenPlayer internal constructor(
                 else -> "Playback failed (${error.errorCodeName}). Choose Reconnect to retry."
             })
             publish()
+            if (failure == PlaybackFailure.MISSING && item?.sourceKind == SourceKind.PLEX) {
+                onFileUnavailable?.invoke(transport.value.detail)
+            }
         }
     }
 
