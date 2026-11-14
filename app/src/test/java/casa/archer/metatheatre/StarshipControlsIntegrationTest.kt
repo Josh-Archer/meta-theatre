@@ -32,8 +32,9 @@ class StarshipControlsIntegrationTest {
         val player=mock(ScreenPlayer::class.java)
         `when`(player.transport).thenReturn(MutableStateFlow(Transport()))
         val model=TheatreModel(context,player)
-        val requests=mutableListOf<Boolean>();var locationChanges=0
+        val requests=mutableListOf<Boolean>();var locationChanges=0;var roadsterReplays=0
         model.onStarshipFlight=requests::add;model.onLocationChanged={locationChanges++}
+        model.onRoadsterReplay={roadsterReplays++}
         compose.setContent { Box(Modifier.requiredSize(1600.dp,900.dp)) { LibraryPanel(model,player) } }
         try {
             compose.onNodeWithText("Scenes").assertIsDisplayed().performClick()
@@ -51,10 +52,19 @@ class StarshipControlsIntegrationTest {
             assertEquals(listOf(true),requests)
             compose.onNodeWithText("End flight").performClick()
             assertEquals(listOf(true,false),requests)
+            val roadster=compose.onNodeWithText("Show / replay Roadster").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle {
+                assertTrue(model.scenePickerPress((roadster.center.x-root.left)/root.width,(roadster.center.y-root.top)/root.height))
+            }
+            assertEquals(1,roadsterReplays)
+            compose.onNodeWithText("Show / replay Roadster").performClick()
+            assertEquals(2,roadsterReplays)
             compose.runOnIdle {
                 model.currentLocation.value=TheatreLocation.entries.first { it != TheatreLocation.EARTH_ORBIT }
                 model.starshipFlight(true)
+                model.replayRoadster()
             }
+            assertEquals(2,roadsterReplays)
             assertEquals(listOf(true,false),requests)
             assertEquals(selections,locationChanges)
             assertEquals("Select Earth orbit, then launch",model.starshipStatus.value)

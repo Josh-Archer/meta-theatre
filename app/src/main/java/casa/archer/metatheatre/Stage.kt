@@ -104,7 +104,8 @@ internal fun shelfTiles(browse: Browse): List<ShelfTile>? {
         is Browse.Home -> browse.videos.map { video ->
             val resume = video.item.viewOffsetMs
             val label = if (resume > 0) "Resume at ${clock(resume)}" else video.item.subtitle
-            ShelfTile(video.item.title, label, video.item.poster)
+            ShelfTile(video.item.title, listOf(video.server?.name ?: "Unavailable server", label)
+                .filter { it.isNotBlank() }.joinToString(" · "), video.item.poster)
         }
         is Browse.Servers -> browse.servers.map { server ->
             ShelfTile(server.name.ifBlank { "Plex" }, "Server", "")

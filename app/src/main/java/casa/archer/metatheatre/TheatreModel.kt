@@ -130,6 +130,7 @@ class TheatreModel(
 
     var onViewTurn: ((Float) -> Unit)? = null
     var onVisitorsReturn: (() -> Unit)? = null
+    internal var onRoadsterReplay: (() -> Unit)? = null
     internal var onStarshipFlight: ((Boolean) -> Unit)? = null
     val starshipStatus = MutableStateFlow("Takeoff · orbit · landing")
     internal var onEarthControl: ((EarthControl) -> Unit)? = null
@@ -212,6 +213,7 @@ class TheatreModel(
         onWatching = null
         onViewTurn = null
         onVisitorsReturn = null
+        onRoadsterReplay = null
         onStarshipFlight = null
         onEarthControl = null
         onLocationChanged = null
@@ -266,6 +268,7 @@ class TheatreModel(
         closeToHome()
         servers = emptyList()
         state.clearHistory()
+        state.preferredPlexServerId = null
         plex.clearToken()
         error.value = null
         libraryOpen.value = true
@@ -616,11 +619,20 @@ class TheatreModel(
     }
 
     fun openServer(server: PlexServer) {
-        Log.i(TAG, "open server")
+        Log.i(TAG, "open server ${server.name}")
         launch("Couldn't open ${server.name}") { generation ->
-            val sections = withContext(ioDispatcher) { plex.sections(server) }
+            val (sections, recent) = withContext(ioDispatcher) {
+                val sections = plex.sections(server)
+                if (sections.isEmpty()) throw PlexException("${server.name} has no TV or movie libraries")
+                sections to runCatching { plex.recentlyViewed(server) }.getOrDefault(emptyList())
+            }
             if (!isCurrentWork(generation)) return@launch
-            if (sections.isEmpty()) throw PlexException("${server.name} has no TV or movie libraries")
+            state.preferredPlexServerId = server.id
+            history.importRecent(bookmarks(server, recent))
+            if (activeMovie == null && history.active?.serverId != server.id) history.leavePlayer()
+            state.saveHistory()
+            // Back must not restore cached cards from the previous server.
+            for (index in stack.indices) if (stack[index] is Browse.Home) stack[index] = homeBrowse()
             show(Browse.Sections(server, sections))
         }
     }
@@ -685,6 +697,7 @@ class TheatreModel(
             ScenePickerAction.Done -> closeScenePicker()
             ScenePickerAction.LaunchStarship -> starshipFlight(true)
             ScenePickerAction.StopStarship -> starshipFlight(false)
+            ScenePickerAction.ReplayRoadster -> replayRoadster()
             null -> Unit
         }
         return true
@@ -696,6 +709,11 @@ class TheatreModel(
             return
         }
         onStarshipFlight?.invoke(start)
+    }
+
+    fun replayRoadster() {
+        if (currentLocation.value != TheatreLocation.EARTH_ORBIT) return
+        onRoadsterReplay?.invoke()
     }
 
     private var earthReturnToPlayer = false
@@ -934,17 +952,23 @@ class TheatreModel(
         }
     }
 
-    private fun showHome() {
-        val videos = history.recent().map { record ->
+    private fun showHome() = show(homeBrowse(), replace = true)
+
+    private fun homeBrowse(): Browse.Home {
+        val videos = history.recent().filter { record ->
+            state.preferredPlexServerId?.let { it == record.key.serverId } ?: true
+        }.map { record ->
             val server = servers.firstOrNull { it.id == record.key.serverId }
             RecentVideo(server, PlexItem(record.key.ratingKey, record.title, record.subtitle, record.type,
                 server?.let { plex.poster(it, record.posterKey) }.orEmpty(), record.posterKey,
                 record.resumeMs, record.durationMs, record.lastPlayedAtMs))
         }
-        show(Browse.Home(videos) { video ->
+        return Browse.Home(videos) { video ->
             val server = video.server
-            if (server == null) error.value = "This Plex server is unavailable" else play(server, video.item)
-        }, replace = true)
+            if (server == null) error.value = "This Plex server is unavailable. Choose a server in Libraries."
+            else if (state.preferredPlexServerId?.let { it != server.id } == true) showHome()
+            else play(server, video.item)
+        }
     }
 
     fun showPlayer() {
@@ -1048,6 +1072,7 @@ class TheatreModel(
     }
 
     private fun play(server: PlexServer, item: PlexItem) {
+        Log.i(TAG, "play from server ${server.name}")
         reconnectJob?.cancel()
         launch("Couldn't play ${item.title}") { generation ->
             val playable = try {
@@ -1082,20 +1107,23 @@ class TheatreModel(
             if (!isCurrentWork(generation)) return@launch
             servers = loadedServers
             if (servers.isEmpty()) throw PlexException("No Plex server answered. Check that the server is on.")
+            val preferredId = state.preferredPlexServerId
+            if (preferredId != null && history.active?.serverId != preferredId) history.leavePlayer()
             val activeAtStart = history.active
             val imported = withContext(ioDispatcher) {
-                servers.flatMap { server ->
-                    runCatching { plex.recentlyViewed(server) }.getOrDefault(emptyList()).map { item ->
-                        Bookmark(MovieKey(server.id, item.ratingKey), item.title, item.subtitle, item.type,
-                            item.posterKey.takeIf { it.startsWith("/") && !it.contains("?") }.orEmpty(),
-                            item.viewOffsetMs, item.durationMs, item.lastViewedAtMs, completed = item.viewOffsetMs == 0L)
-                    }
+                servers.filter { preferredId == null || it.id == preferredId }.flatMap { server ->
+                    bookmarks(server, runCatching { plex.recentlyViewed(server) }.getOrDefault(emptyList()))
                 }
             }
             if (!isCurrentWork(generation)) return@launch
             history.importRecent(imported)
             state.saveHistory()
             showHome()
+            if (preferredId != null && servers.none { it.id == preferredId }) {
+                show(Browse.Servers(servers), replace = true)
+                error.value = "Your selected Plex server is unavailable. Choose a server."
+                return@launch
+            }
             Log.i(TAG, "recently watched count=${history.recent().size}")
             if (browseLibraries) { openLibraries(); return@launch }
             if (restoreActive && activeAtStart != null) {
@@ -1107,6 +1135,12 @@ class TheatreModel(
                 }
             }
         }
+    }
+
+    private fun bookmarks(server: PlexServer, items: List<PlexItem>) = items.map { item ->
+        Bookmark(MovieKey(server.id, item.ratingKey), item.title, item.subtitle, item.type,
+            item.posterKey.takeIf { it.startsWith("/") && !it.contains("?") }.orEmpty(),
+            item.viewOffsetMs, item.durationMs, item.lastViewedAtMs, completed = item.viewOffsetMs == 0L)
     }
 
     private fun launch(fallback: String, block: suspend (Int) -> Unit) {

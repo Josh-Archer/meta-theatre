@@ -164,6 +164,12 @@ class TheatreActivity : AppSystemActivity() {
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
+        model.onRoadsterReplay = {
+            if (immersiveFocused) {
+                frameSpaceExhibit()
+                spaceVisitorRenderer?.replayRoadster()
+            }
+        }
         model.onStarshipFlight = { start ->
             if (start && immersiveFocused) startStarshipFlight()
             else if (!start) starshipRenderer?.stop()
@@ -961,6 +967,11 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun startStarshipFlight() {
+        frameSpaceExhibit()
+        starshipRenderer?.start()
+    }
+
+    private fun frameSpaceExhibit() {
         deviceLocation.manualView()
         grip?.cancelEarthGrab()
         spaceVisitorRenderer?.cancelGrab()
@@ -969,7 +980,6 @@ class TheatreActivity : AppSystemActivity() {
         earthExploration.apply(EarthControl.HOME, viewer)
         earthExploration.apply(EarthControl.EQUATOR, viewer)
         syncEarthView()
-        starshipRenderer?.start()
     }
 
     private fun onEarthControl(control: EarthControl) {

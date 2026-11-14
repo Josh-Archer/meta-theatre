@@ -128,6 +128,14 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
         models.forEach { startReturn(it, Vector3(0f, 0f, 0f)) }
         update()
     }
+    fun replayRoadster() {
+        val entry = entries.firstOrNull { it.visitor == SpaceVisitors.roadster } ?: return
+        inspection.remove(entry.visitor.asset)
+        entry.returning = null
+        entry.phaseOffset = SpaceVisitors.replayOffset(entry.visitor, elapsedClock.elapsedSeconds())
+        update()
+        android.util.Log.i("TheatreVisitors", "Roadster replay requested paused=${elapsedClock.isPaused}")
+    }
     fun cancelGrab() { inspection.cancelGrab() }
     fun release() { inspection.reset(); entries.clear() }
 }

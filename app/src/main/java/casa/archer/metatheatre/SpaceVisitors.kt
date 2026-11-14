@@ -22,9 +22,12 @@ object SpaceVisitors {
     }
 
     /** A returned model should visibly resume flying even if its original pass has ended. */
+    internal fun replayOffset(visitor: Visitor, elapsedSeconds: Double) =
+        elapsedSeconds - visitor.firstPassSeconds - visitor.durationSeconds * .5
+
     internal fun returnOffset(visitor: Visitor, elapsedSeconds: Double, offset: Double): Double {
         val current = progress(visitor, elapsedSeconds - offset)
-        return if (current == null || current > .75) elapsedSeconds - visitor.firstPassSeconds - visitor.durationSeconds * .5
+        return if (current == null || current > .75) replayOffset(visitor, elapsedSeconds)
             else offset
     }
 

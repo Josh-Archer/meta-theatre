@@ -38,6 +38,75 @@ class PlexRecoveryIntegrationTest {
     }
     @After fun finish() { Dispatchers.resetMain() }
 
+    @Test fun selectingAServerScopesRecentCardsAndSurvivesRestartWithoutRestoringTheOtherServer() {
+        val plex = mock(PlexClient::class.java)
+        val nas = PlexServer("NAS", "https://nas.invalid", "synthetic", "nas")
+        val lab = PlexServer("Lab", "https://lab.invalid", "synthetic", "lab")
+        val section = PlexSection("1", "TV", "show")
+        // Server-local keys can collide; they must never be remapped between servers.
+        val nasItem = PlexItem("42", "NAS episode", "", "episode", viewOffsetMs = 42_000, durationMs = 120_000, lastViewedAtMs = 1000)
+        val labItem = nasItem.copy(title = "Lab episode", viewOffsetMs = 15_000)
+        `when`(plex.token).thenReturn("synthetic")
+        `when`(plex.servers()).thenReturn(listOf(nas, lab))
+        `when`(plex.recentlyViewed(nas)).thenReturn(listOf(nasItem))
+        `when`(plex.recentlyViewed(lab)).thenReturn(listOf(labItem))
+        `when`(plex.sections(lab)).thenReturn(listOf(section))
+        `when`(plex.playable(lab, labItem)).thenReturn(Playable("Lab episode", "https://lab.invalid/movie", "https://lab.invalid/hls", emptyMap()))
+        val screen = ScreenPlayer(context)
+        var model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        try {
+            model.start()
+            model.openServer(lab)
+            model.openLibrary()
+            val home = model.browse.value as Browse.Home
+            assertEquals(listOf(lab.id), home.videos.map { it.server?.id })
+            assertTrue(shelfTiles(home)!!.single().subtitle.contains("Lab"))
+            model.release()
+            // An old active bookmark must not defeat the explicitly selected server.
+            val state = TheatreState(context)
+            state.history.begin(Bookmark(MovieKey(nas.id, "42"), "NAS episode", "", "episode", "", 42_000, 120_000, 2000))
+            state.saveHistory()
+            model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+            model.start()
+            val restored = model.browse.value as Browse.Home
+            assertEquals(listOf(lab.id), restored.videos.map { it.server?.id })
+            assertNull(TheatreState(context).history.active)
+            assertEquals(42_000L, TheatreState(context).history.find(MovieKey(nas.id, "42"))!!.positionMs)
+            restored.onOpen(restored.videos.single())
+            verify(plex).playable(lab, labItem)
+            assertEquals(MovieKey(lab.id, "42"), TheatreState(context).history.active)
+            assertEquals(15_000L, screen.transport.value.positionMs)
+            assertTrue(mockingDetails(plex).invocations.none {
+                it.method.name == "playable" && it.arguments.firstOrNull() == nas
+            })
+        } finally { model.release(); screen.release() }
+    }
+
+    @Test fun unavailablePreferredServerOffersAChoiceWithoutFallingBackOrLosingItsBookmark() {
+        val plex = mock(PlexClient::class.java)
+        val nas = PlexServer("NAS", "https://nas.invalid", "synthetic", "nas")
+        val state = TheatreState(context)
+        state.preferredPlexServerId = "lab"
+        val key = MovieKey("lab", "42")
+        state.history.begin(Bookmark(key, "Episode", "", "episode", "", 42_000, 120_000, 1))
+        state.saveHistory()
+        `when`(plex.token).thenReturn("synthetic")
+        `when`(plex.servers()).thenReturn(listOf(nas))
+        doAnswer { throw PlexException("Server offline", PlexFailure.CONNECTION) }.`when`(plex).sections(nas)
+        val screen = ScreenPlayer(context)
+        val model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        try {
+            model.start()
+            assertEquals(listOf(nas), (model.browse.value as Browse.Servers).servers)
+            assertTrue(model.error.value!!.contains("selected Plex server is unavailable"))
+            assertEquals("", screen.transport.value.title)
+            model.openServer(nas)
+            assertEquals("lab", TheatreState(context).preferredPlexServerId)
+            assertEquals(42_000L, TheatreState(context).history.find(key)!!.positionMs)
+            verify(plex, never()).recentlyViewed(nas)
+        } finally { model.release(); screen.release() }
+    }
+
     @Test fun metadataChecksFileAvailabilityBeforeOpeningThePlayerAndAllowsUnreportedAvailability() {
         val http = MockWebServer().apply { start() }
         try {

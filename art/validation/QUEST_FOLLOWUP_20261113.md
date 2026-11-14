@@ -67,3 +67,45 @@ Ignored raw evidence is under `art/validation/playback-20261113/`: the failing
 rotation regression, final build log, sanitized device log and capture. Actual
 video/audio playback from the available Plex server and vehicle appearance are
 separate wearer checks, pending at this checkpoint.
+
+## Follow-up: selected server and Roadster replay
+
+The next wearer report was that the car was absent and playback still selected
+homenas instead of homelab0. Recently watched previously combined server-local
+bookmarks without a visible source label, and choosing a library did not scope
+that list. Selecting a server now persists its ID, filters and refreshes recent
+cards from that source, and updates cached Home pages used by Back. Cards also
+show their server name. Restart cannot restore a bookmark from a different
+server. An unavailable selected server offers a choice rather than silently
+falling back. Failed selection leaves the previous preference intact; signing
+out clears it. Server-local rating keys and bookmarks are not remapped.
+
+This headset's preference was set to homelab0 with the app stopped; the exact
+history JSON was preserved and the app was launched normally afterward. A fresh
+authenticated request verified Hijack S2E1 on homelab0: exists/accessibility true,
+3840×1606, 7,021,569,977 bytes, HTTP 206 and 1,024 bytes read. This establishes
+source availability, not Quest decoder or audio/video success.
+
+The Roadster normally has a 55-second hidden interval between 95-second passes.
+The device log showed it hiding just after the user launched Starship. Scenes now
+includes **Show / replay Roadster**, which frames the exhibit around the current
+viewer and places the car at the middle of its pass. The remaining pass lasts
+47.5 seconds. Replay clears only the car's grabbed/parked/return-flight state;
+the ISS is retained. Quiet cinema remains respected. Model geometry, materials,
+textures and the current near-plane mitigation are unchanged in this follow-up.
+
+Validation of the latest build:
+
+- **285 tests passed**, zero failures/errors/skips; debug assembly passed; lint
+  zero errors and 62 warnings. Tests cover source-specific recent cards, restart
+  with an old active bookmark, colliding server-local keys, unavailable servers,
+  failed selection, retained progress and navigation cancellation.
+- Compose exercises the visible Roadster control with both native pointer
+  activation and measured hand-ray coordinates. Flight tests check that replay
+  starts in front of the seat even during the normal hidden interval.
+- Installed in place on the Quest; installed/local APK SHA-256 both equal
+  `df1b8086c5f040fda10a9043f292108711f70e9883981d39a09d861e6425d00d`.
+
+Actual Roadster visibility/flicker and Plex video/audio are pending the next
+wearer check. The earlier missing-file recovery and quaternion fixes remain in
+this build. Raw local evidence is ignored under `playback-20261113/`.

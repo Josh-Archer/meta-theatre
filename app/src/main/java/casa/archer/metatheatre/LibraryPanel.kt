@@ -660,6 +660,8 @@ private fun ScenePickerMenu(model: TheatreModel) {
             ZoneButton("Launch / replay Starship", Modifier.fillMaxHeight().weight(.7f), acceptPointerClick = true) { model.starshipFlight(true) }
             ZoneButton("End flight", Modifier.fillMaxHeight().weight(.3f), acceptPointerClick = true) { model.starshipFlight(false) }
         }
+        ZoneButton("Show / replay Roadster", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .12f).dp),
+            acceptPointerClick = true) { model.replayRoadster() }
         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             Text(
                 "$flightStatus\nStaged flight · Earth view · pauses during Quiet cinema",
