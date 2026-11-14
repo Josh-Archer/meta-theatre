@@ -271,7 +271,14 @@ Validation of this follow-up:
   `d8fddfbc9fe2ca6caecf683928cf5c5797a090fab9b0792a836571b777fd20fa`.
   The source-controlled Roadster remains the canonical byte-exact asset.
 
-The updated pause behavior, translucent surface in the headset and 32-bit
-Roadster appearance still require wearer comparison. The earlier input result
-is not presented as acceptance of these later changes. Raw logs, APK variants
-and UI images remain ignored under `playback-20261113/`.
+The wearer subsequently confirmed **the movie keeps playing when moving away
+from the controls and the panel is see-through**. The latest native session
+rendered video at 15:10:09, hid the controls at 15:10:13, and advanced the saved
+position from 1,308,608 ms to 1,328,819 ms by 15:10:29 without a stop-palm pause.
+This supports the wearer result. The first startup preceded Wi-Fi validation by
+about two seconds and failed discovery; a normal relaunch after reconnection
+restored playback. The 32-bit Roadster appearance comparison remains pending.
+
+Raw logs, APK variants and UI images remain ignored under `playback-20261113/`.
+GitHub reported no commit statuses or workflow runs for the implementation head
+`50b48ceee636cabec38f03cef83c61654e04d8ba`; the passing checks above are local.
