@@ -35,6 +35,9 @@ No third-party mesh or SpaceX image is bundled.
   export. Run through the live bridge with `__file__` set to its absolute path.
 - `exports/starship_20261113/`: reviewed exports. Four Starship files and the
   revised Roadster have byte-identical copies in `app/src/main/assets/`.
+  The Roadster uses one child mesh per material to avoid Quest import artifacts;
+  its binary geometry and texture payload is unchanged. See the
+  [Quest repair record](validation/ROADSTER_20261114.md).
 - `renders/starship_20261113/`: studio reviews, matched Roadster material
   comparisons and a labeled flight preview. These are Blender renders, not
   headset captures. The preview follows the actual Kotlin trajectory at 6×
@@ -68,6 +71,10 @@ resizing or reduced source quality is used.
 2. Run `scripts/optimize_reviewed_glb.mjs` with the glTF Transform dependency
    directory and the four exported Starship GLBs; copy them to runtime assets.
 3. Run `scripts/validate_starship_assets.cjs` with `gltf-validator` on `NODE_PATH`.
+   For the Roadster, `scripts/refine_roadster_finish.py` also runs
+   `scripts/separate_roadster_meshes.py`; publish its output to both
+   `exports/flybys/space_roadster.glb` and the runtime asset. The validator checks
+   the ten identity child nodes and unchanged indexed geometry.
 4. Run `./gradlew testDebugUnitTest assembleDebug lintDebug`. To export the
    tested native trajectory, set `META_THEATRE_FLIGHT_PREVIEW` to an absolute
    `art/validation/starship-20261113/flight-frames.json` path before the tests.

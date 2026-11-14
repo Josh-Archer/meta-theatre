@@ -3,6 +3,7 @@ Run in Blender (live bridge or --background --python). Root is derived from this
 """
 from pathlib import Path
 import bpy, json, struct, numpy as np
+import runpy
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'art/exports/starship_20261113';OUT.mkdir(parents=True,exist_ok=True)
 TEX=ROOT/'art/textures/roadster_20261113';TEX.mkdir(parents=True,exist_ok=True)
@@ -39,7 +40,8 @@ while len(chunks)%4:chunks.append(0)
 doc['buffers'][0]['byteLength']=len(chunks)
 js=json.dumps(doc,separators=(',',':')).encode();js+=b' '*((-len(js))%4)
 glb=struct.pack('<III',0x46546c67,2,28+len(js)+len(chunks))+struct.pack('<II',len(js),0x4e4f534a)+js+struct.pack('<II',len(chunks),0x004e4942)+chunks
-(OUT/'space_roadster.glb').write_bytes(glb)
+separate_meshes=runpy.run_path(str(ROOT/'art/scripts/separate_roadster_meshes.py'))['separate_meshes']
+(OUT/'space_roadster.glb').write_bytes(separate_meshes(glb))
 # Preserve editable components and their authored normals in a versioned source.
 with bpy.data.libraries.load(str(ROOT/'art/blender/space_roadster_realism_20261111.blend')) as (a,b):b.scenes=a.scenes
 scene=next(s for s in b.scenes if any('ROADSTER' in c.name for c in s.collection.children));bpy.context.window.scene=scene

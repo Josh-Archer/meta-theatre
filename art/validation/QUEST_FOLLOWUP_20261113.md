@@ -282,3 +282,14 @@ restored playback. The 32-bit Roadster appearance comparison remains pending.
 Raw logs, APK variants and UI images remain ignored under `playback-20261113/`.
 GitHub reported no commit statuses or workflow runs for the implementation head
 `50b48ceee636cabec38f03cef83c61654e04d8ba`; the passing checks above are local.
+
+## Roadster resolution — November 14
+
+The [Roadster repair record](ROADSTER_20261114.md) supersedes the pending
+32-bit comparison and unresolved surface defect above. A new Quest capture of
+the wider-index build still showed the stripes. Separating the existing ten
+material primitives into ten child meshes fixed the visible defect without
+changing any geometry, texture or material bytes. The wearer first confirmed
+the body was solid, then confirmed **body and lighting look good** after the
+flyby angle and shaded-side fill were corrected. The final installed APK uses
+the committed export, with no local-only asset probe.

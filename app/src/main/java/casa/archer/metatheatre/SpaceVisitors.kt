@@ -41,7 +41,7 @@ object SpaceVisitors {
             (cos(yaw) * cos(elevation)).toFloat()) * visitor.distance
         val facing = Quaternion.fromDirection(EarthRenderer.SEAT_EYE - center, Vector3(0f, 1f, 0f))
         // Slow roll exposes array cells, the open cockpit and Starman without rapid motion in VR.
-        val turn = if (visitor == roadster) Quaternion(pitch = -25f, yaw = 35f, roll = (p * 22 - 11).toFloat())
+        val turn = if (visitor == roadster) Quaternion(pitch = 25f, yaw = 35f, roll = (p * 22 - 11).toFloat())
             else Quaternion(pitch = -28f, yaw = (p * 35 - 17.5).toFloat(), roll = 12f)
         return Pose(center, facing * turn)
     }

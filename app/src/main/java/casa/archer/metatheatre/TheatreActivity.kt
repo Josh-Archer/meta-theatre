@@ -155,7 +155,7 @@ class TheatreActivity : AppSystemActivity() {
         val diagnostic = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
             listOf("metatheatre.test_video", "metatheatre.test_weather", "metatheatre.test_earth_controls",
                 "metatheatre.test_location", "metatheatre.test_precise_location", "metatheatre.test_cloud_fixture",
-                "metatheatre.test_earth_registration", "metatheatre.test_earth_detail", "metatheatre.test_asset_lifecycle", "metatheatre.test_starship")
+                "metatheatre.test_earth_registration", "metatheatre.test_earth_detail", "metatheatre.test_asset_lifecycle", "metatheatre.test_starship", "metatheatre.test_roadster")
                 .any { intent.getBooleanExtra(it, false) }
         model.onPrepareScreen = { ensureVideo() }
         model.onWatching = { watching -> applyWatching(watching) }
@@ -285,7 +285,7 @@ class TheatreActivity : AppSystemActivity() {
         scene.enableHolePunching(true)
         scene.setColorSpace(com.meta.spatial.runtime.Scene.ColorSpace.REC709)
         scene.setLightingEnvironment(
-            ambientColor = Vector3(0.06f, 0.07f, 0.09f),
+            ambientColor = Vector3(0.22f, 0.25f, 0.30f),
             sunColor = Vector3(1.4f, 1.32f, 1.15f),
             sunDirection = (SolarSystem.sunPosition(Instant.now(), ZoneId.systemDefault()) - EarthRenderer.SEAT_EYE).normalize(),
             environmentIntensity = 0.18f,
@@ -400,7 +400,20 @@ class TheatreActivity : AppSystemActivity() {
         runEarthRegistrationTest()
         runAssetLifecycleTest()
         runStarshipTest()
+        runRoadsterReview()
         runLocationTest()
+    }
+
+    private fun runRoadsterReview() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_roadster", false)) return
+        scope.launch {
+            earthLoad?.join()
+            delay(2_000)
+            val viewer = scene.getViewerPose()
+            grip?.screenHidden = true
+            spaceVisitorRenderer?.reviewRoadster(viewer, intent.getFloatExtra("metatheatre.roadster_review_yaw", 25f))
+        }
     }
 
     private fun runStarshipTest() {
