@@ -131,4 +131,30 @@ class MovieGesturesTest {
         targets.clear()
         assertNull(targets.at(0.5f, 0.45f))
     }
+    @Test fun secondaryHandCannotTapOrSeekButCanParticipateInResize() {
+        val gestures = MovieHandGestures()
+        val secondary = hand(2, x = .2f).copy(allowAction = false)
+        gestures.update(listOf(secondary), screen, 0)
+        gestures.update(listOf(secondary.copy(pinching = true)), screen, 10)
+        assertTrue(gestures.update(listOf(secondary.copy(pinching = true, x = .4f)), screen, 20).seekDirections.isEmpty())
+        assertTrue(gestures.update(listOf(secondary), screen, 30).taps.isEmpty())
+        gestures.reset()
+        gestures.update(listOf(hand(1, x = -.2f), secondary), screen, 40)
+        assertTrue(gestures.update(listOf(hand(1, down = true, x = -.2f), secondary.copy(pinching = true)), screen, 50).resizing)
+        val released = gestures.update(listOf(hand(1, x = -.2f), secondary), screen, 60)
+        assertTrue(released.taps.isEmpty())
+        assertTrue(released.seekDirections.isEmpty())
+    }
+
+    @Test fun timelineDragUsesTheThumbTravelAndClampsAtBothEnds() {
+        val targets = PlayerHitTargets()
+        targets.put(PlayerTarget.Seek, PlayerHitRect(.1f, .2f, .9f, .3f), horizontalInset = .02f)
+        assertEquals(PlayerTarget.Seek, targets.at(.11f, .25f))
+        assertEquals(0f, targets.seekFraction(.12f)!!, .00001f)
+        assertEquals(.5f, targets.seekFraction(.5f)!!, .00001f)
+        assertEquals(1f, targets.seekFraction(.88f)!!, .00001f)
+        targets.remove(PlayerTarget.Seek)
+        assertNull(targets.seekFraction(.5f))
+    }
+
 }

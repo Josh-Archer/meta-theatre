@@ -1,10 +1,9 @@
 package casa.archer.metatheatre
 
-/** Physical spacing for the video and its independent side controls. */
+/** Physical spacing for video and its attached controls. */
 internal object Stage {
-    const val PLAYER_WIDTH = 0.84f
-    const val PLAYER_HEIGHT = 2.0f
-    const val PLAYER_GAP = 0.10f
+    const val PLAYER_WIDTH = 2.8f
+    const val PLAYER_HEIGHT = PLAYER_WIDTH * PlayerPlacement.HEIGHT_DP / PlayerPlacement.WIDTH_DP
     const val PLAYER_SLIDE = 0.20f
     const val VIDEO_FORWARD = 0.05f
     const val PLAYER_FORWARD = 0.09f
@@ -104,7 +103,8 @@ internal fun shelfTiles(browse: Browse): List<ShelfTile>? {
         is Browse.Home -> browse.videos.map { video ->
             val resume = video.item.viewOffsetMs
             val label = if (resume > 0) "Resume at ${clock(resume)}" else video.item.subtitle
-            ShelfTile(video.item.title, label, video.item.poster)
+            ShelfTile(video.item.title, listOf(video.server?.name ?: "Unavailable server", label)
+                .filter { it.isNotBlank() }.joinToString(" · "), video.item.poster)
         }
         is Browse.Servers -> browse.servers.map { server ->
             ShelfTile(server.name.ifBlank { "Plex" }, "Server", "")

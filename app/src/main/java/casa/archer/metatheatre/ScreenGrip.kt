@@ -67,6 +67,9 @@ internal class ScreenGripSystem(
     private val hasSubtitleCues: () -> Boolean = { false },
     private val onPanelCursor: (PanelCursor?) -> Unit = {},
     private val onPoseSaved: (Pose) -> Unit = {},
+    private val playbackNeedsAttention: () -> Boolean = { false },
+    private val playerSettingsOpen: () -> Boolean = { false },
+    private val onPlayerPressed: (PlayerTarget?) -> Unit = {},
 ) : SystemBase() {
     var watching: Boolean = false
         set(value) {
@@ -104,6 +107,7 @@ internal class ScreenGripSystem(
     private val autoHide = PlayerAutoHide()
     private val revealMotion = RailRevealMotion()
     private val handGestures = ScreenHandGestures()
+    private val cursorFocus = CursorFocus()
     private val openGestures = OpenHandGestures()
     private val earthSpin = EarthSpinGesture()
     fun cancelEarthGrab() = earthSpin.cancel()
@@ -129,6 +133,7 @@ internal class ScreenGripSystem(
     private var lastScreenHidden = false
     private var lastSubtitlesVisible = false
     private var lastPlayerFraction = -1f
+    private var lastPlayerExpanded = false
     private var observedSize: ScreenSize? = null
     private var savedSize: ScreenSize? = null
     private var sizeChangedMs = 0L
@@ -152,9 +157,7 @@ internal class ScreenGripSystem(
         Transform(Pose()), Visible(false),
     )
     private val libraryBacking = opaqueBacking("library")
-    private val playerBacking = opaqueBacking("player")
     private var lastLibraryBacking: PanelBackingState? = null
-    private var lastPlayerBacking: PanelBackingState? = null
     private fun applyBacking(entity: Entity, state: PanelBackingState) {
         entity.setComponent(Transform(state.pose))
         entity.setComponent(Scale(Vector3(state.size.width,state.size.height,1f)))
@@ -224,11 +227,27 @@ internal class ScreenGripSystem(
         Log.i(TAG, "screen pose saved pos=${pose.t} rot=${pose.q}")
     }
 
+    fun suspendInput() {
+        cursorFocus.clear()
+        handGestures.reset()
+        openGestures.reset()
+        downState.clear()
+        stickSeek.clear()
+        val now = SystemClock.uptimeMillis()
+        railSelections.keys.forEach { autoHide.select(it, false, now) }
+        railSelections.clear()
+        grab = null
+        onSeekPreview(null)
+        onPlayerPressed(null)
+        onPanelCursor(null)
+        placeCursor(null, null)
+    }
+
     fun playerInteraction() = autoHide.interact(SystemClock.uptimeMillis())
 
     private fun updatePlayerVisibility() {
         val now = SystemClock.uptimeMillis()
-        autoHide.tick(now)
+        autoHide.tick(now, playbackNeedsAttention())
         if (playerOpen != autoHide.visible) {
             playerOpen = autoHide.visible
             slideStartFraction = playerFraction
@@ -277,7 +296,8 @@ internal class ScreenGripSystem(
         val geometryChanged = force || lastPresentationFraction != fraction || lastOverlays !== overlays || lastOverlayPose != pose ||
             lastOverlayWidth != width || lastOverlayHeight != height || lastWatching != watching || lastScreenHidden != screenHidden
         val subtitlesVisible = watching && !screenHidden && hasSubtitleCues()
-        if (!geometryChanged && lastPlayerFraction == playerFraction && lastSubtitlesVisible == subtitlesVisible) return
+        val expanded = playerSettingsOpen()
+        if (!geometryChanged && lastPlayerFraction == playerFraction && lastSubtitlesVisible == subtitlesVisible && lastPlayerExpanded == expanded) return
         val forward = pose.forward()
         val up = pose.up()
         val show = watching && fraction > .001f
@@ -298,21 +318,16 @@ internal class ScreenGripSystem(
             overlays.subtitles?.setComponent(Visible(subtitlesVisible))
         }
         val barShift = if (show) Stage.PLAYER_FORWARD else -Stage.HIDDEN_BACK
-        val rail = SideRailPlacement.beside(ScreenSize(width, height))
-        // The viewer's right is opposite the library panel's local +X.
-        val right = pose.right().times(-1f)
-        val railCenter = pose.t.plus(right.times(rail.right)).plus(up.times(rail.up))
-        val barCenter = railCenter.plus(right.times((1f - playerFraction) * Stage.PLAYER_SLIDE))
-            .plus(forward.times(barShift))
+        val placement = PlayerPlacement.inside(size)
+        val slide = -(1f - playerFraction) * Stage.PLAYER_SLIDE
+        val barCenter = pose.t.plus(up.times(placement.up + slide)).plus(forward.times(barShift))
         overlays.player.setComponent(Transform(Pose(barCenter, pose.q)))
-        overlays.player.setComponent(Visible(show && !screenHidden && playerFraction > 0.001f))
-        val railBacking = PanelPresentation.backing(Pose(barCenter,pose.q),ScreenSize(Stage.PLAYER_WIDTH,Stage.PLAYER_HEIGHT),
-            show && !screenHidden && playerFraction > .001f)
-        if (force || railBacking != lastPlayerBacking) {
-            applyBacking(playerBacking,railBacking)
-            if (lastPlayerBacking?.visible != railBacking.visible) Log.i(TAG,"side menu opaque backing visible=${railBacking.visible}")
-            lastPlayerBacking = railBacking
-        }
+        overlays.player.setComponent(scaleTo(placement.width, placement.height, Stage.PLAYER_WIDTH, Stage.PLAYER_HEIGHT))
+        val controlsVisible = show && !screenHidden && playerFraction > .001f
+        overlays.player.setComponent(Visible(controlsVisible))
+        // Compose supplies the translucent surface; an opaque depth backing
+        // here would hide the movie behind it and defeat the panel's alpha.
+        lastPlayerExpanded = expanded
         lastPresentationFraction = fraction
         lastOverlays = overlays
         // SDK poses and vectors are mutable; retain independent values for comparison.
@@ -349,21 +364,34 @@ internal class ScreenGripSystem(
             val pose = runCatching { entity.getComponent<Transform>().transform }.getOrNull() ?: return@mapNotNull null
             TrackedInput(entity, controller, pose)
         }.toList()
+        val aims = inputs.associate { it.entity.id to aim(it.pose) }
+        val rails = if (watching) inputs.associate { it.entity.id to aimRail(it.pose, false) } else emptyMap()
         val pointers = inputs.map { input ->
             val isHand = input.controller.type == ControllerType.HAND
             val down = if (isHand) input.controller.isDown(PINCH_R) || input.controller.isDown(PINCH_L)
                 else input.controller.isDown(TRIGGER_L) || input.controller.isDown(TRIGGER_R)
             val blockers = if (!interactive) emptyList() else listOfNotNull(
-                aim(input.pose)?.takeIf { it.onFace }?.distance,
-                aimRail(input.pose, false)?.takeIf { watching && playerOpen && it.onFace }?.distance)
+                aims[input.entity.id]?.takeIf { it.onFace }?.distance,
+                rails[input.entity.id]?.takeIf { playerOpen && it.onFace }?.distance)
             VisitorPointer(input.entity.id, input.pose, down, blockers.minOrNull() ?: Float.POSITIVE_INFINITY)
         }
         val globe = earthTarget()
-        val visitorPointers = if (globe == null) pointers else pointers.map { pointer ->
+        if (navigating || sdkManipulating) cursorFocus.clear()
+        val cursorDriver = if (navigating || sdkManipulating) null else cursorFocus.update(
+            pointers.map { pointer ->
+                val panelHit = if (!interactive) null else listOfNotNull(aims[pointer.id]?.takeIf { it.onFace },
+                    rails[pointer.id]?.takeIf { playerOpen && playerFraction > .75f && it.onFace }).minByOrNull { it.distance }
+                val sceneDistance = listOfNotNull(visitors?.pointerHit(pointer)?.distance,
+                    globe?.let { ScenePointer.hit(pointer, it)?.distance }).minOrNull()
+                CursorCandidate(pointer.id, minOf(panelHit?.distance ?: Float.POSITIVE_INFINITY,
+                    sceneDistance ?: Float.POSITIVE_INFINITY), pointer.down && downState[pointer.id] == false, pointer.down)
+            }, now)
+        val ownedPointers = pointers.map { it.copy(allowAction = it.id == cursorDriver) }
+        val visitorPointers = if (globe == null) ownedPointers else ownedPointers.map { pointer ->
             ScenePointer.hit(pointer, globe)?.let { pointer.copy(maxDistance = it.distance) } ?: pointer
         }
         val visitorInput = visitors?.interact(visitorPointers, viewerPose(), now, navigating || sdkManipulating) ?: VisitorInputResult()
-        val earthInput = earthSpin.update(pointers, globe, viewerPose(), navigating || sdkManipulating, visitorInput.owned)
+        val earthInput = earthSpin.update(ownedPointers, globe, viewerPose(), navigating || sdkManipulating, visitorInput.owned)
         if (earthInput.degrees != 0f) onEarthSpin(earthInput.degrees)
         val sceneOwned = visitorInput.owned + earthInput.owned
         val sceneHover = listOfNotNull(visitorInput.hover, earthInput.hover).minByOrNull { it.distance }
@@ -394,6 +422,7 @@ internal class ScreenGripSystem(
             val controller = input.controller
             val pose = input.pose
             val isHand = controller.type == ControllerType.HAND
+            val ownsCursor = cursorDriver == id
             // In Spatial SDK 0.14, index pinches are A/X, not the trigger bits.
             val down = if (isHand) controller.isDown(PINCH_R) || controller.isDown(PINCH_L)
                 else controller.isDown(TRIGGER_L) || controller.isDown(TRIGGER_R)
@@ -410,20 +439,26 @@ internal class ScreenGripSystem(
             }
             if (isHand && (pressed || released)) Log.i(TAG, "hand pinch ${if (down) "down" else "up"}")
 
+            val overControls = watching && playerOpen && playerFraction > .75f && rails[id]?.onFace == true
             if (watching) {
                 val reveal = aimRail(pose, reveal = true)
                 val inReveal = reveal?.takeIf { it.onFace }
-                if (revealMotion.update(id, inReveal?.xNorm?.times(Stage.PLAYER_WIDTH + REVEAL_PAD),
-                        inReveal?.yNorm?.times(Stage.PLAYER_HEIGHT + REVEAL_PAD))) autoHide.interact(now)
-                val rail = aimRail(pose, reveal = false)
+                val placement = PlayerPlacement.inside(screenSize())
+                if (revealMotion.update(id, inReveal?.xNorm?.times(placement.width + REVEAL_PAD),
+                        inReveal?.yNorm?.times(placement.height + REVEAL_PAD)) && ownsCursor) autoHide.interact(now)
+                val rail = rails[id]
                 val onRail = rail?.onFace == true && playerOpen && playerFraction > 0.75f
                 val target = if (onRail) playerTargets.at(rail!!.xNorm, rail.yNorm) else null
-                if (pressed && target != null) {
+                if (ownsCursor && pressed && target != null) {
                     if (target != PlayerTarget.Seek || railSelections.values.none { it.target == PlayerTarget.Seek }) {
                         railSelections[id] = RailSelection(target)
                         autoHide.select(id, true, now)
                         Log.i(TAG, "rail select ${controller.type.name}")
                     }
+                }
+                if (!ownsCursor && railSelections.remove(id) != null) {
+                    autoHide.select(id, false, now)
+                    onSeekPreview(null)
                 }
                 val selection = railSelections[id]
                 if (selection?.target == PlayerTarget.Seek && rail != null) {
@@ -443,20 +478,20 @@ internal class ScreenGripSystem(
                         is PlayerTarget.Button -> if (target == selected) onPlayerControl(selected.control)
                     }
                 }
-                if (onRail && rail!!.distance < panelDistance) {
+                if (ownsCursor && onRail && rail!!.distance < panelDistance) {
                     panelHover = PanelCursor(PointerPanel.PLAYER,rail.xNorm,rail.yNorm)
                     panelDistance = rail.distance
                 }
-                if (onRail && (hovered == null || rail!!.distance < hovered.distance)) {
+                if (ownsCursor && onRail && (hovered == null || rail!!.distance < hovered.distance)) {
                     hovered = rail; cursorOrigin = pose.t
                 }
             }
 
-            val aimed = aim(pose)
-            if (aimed != null && (!watching || aimed.onFace) && (hovered == null || aimed.distance < hovered.distance)) {
+            val aimed = aims[id]
+            if (ownsCursor && aimed != null && (!watching || aimed.onFace) && (hovered == null || aimed.distance < hovered.distance)) {
                 hovered = aimed; cursorOrigin = pose.t
             }
-            if (!watching && aimed?.onFace == true && aimed.distance < panelDistance) {
+            if (ownsCursor && !watching && aimed?.onFace == true && aimed.distance < panelDistance) {
                 panelHover = PanelCursor(PointerPanel.LIBRARY,aimed.xNorm,aimed.yNorm)
                 panelDistance = aimed.distance
             }
@@ -465,7 +500,8 @@ internal class ScreenGripSystem(
                 val screenPose = screen.getComponent<Transform>().transform
                 hands.add(HandInput(id, down, pose.t.dot(screenPose.right().times(-1f)),
                     pose.t.dot(screenPose.up()), pose.t.dot(screenPose.forward()),
-                    onVideo = aimed?.onFace == true && railSelections[id] == null))
+                    onVideo = aimed?.onFace == true && !overControls && railSelections[id] == null,
+                    allowAction = ownsCursor))
                 continue
             }
             val held = grab
@@ -478,16 +514,16 @@ internal class ScreenGripSystem(
                 grab = Grab(input.entity, Pose(pose.t.copy(), pose.q.copy()),
                     screen.getComponent<Transform>().transform.let { Pose(it.t.copy(), it.q.copy()) })
                 Log.i(TAG, "grip move started")
-            } else if (aimed?.onFace == true && pressed) {
+            } else if (ownsCursor && !overControls && aimed?.onFace == true && pressed) {
                 onPress(aimed.xNorm, aimed.yNorm)
             }
-            val onVisibleRail = watching && playerOpen && playerFraction > .75f && aimRail(pose, false)?.onFace == true
+            val onVisibleRail = watching && playerOpen && playerFraction > .75f && rails[id]?.onFace == true
             if (!gripping(controller) && aimed?.onFace != true && !onVisibleRail) {
                 turnFromStick(controller)
                 stickSeek.remove(id)
                 continue
             }
-            if (watching && !gripping(controller)) {
+            if (watching && ownsCursor && !gripping(controller)) {
                 val seek = stickSeek.getOrPut(id) { MovieStickSeek() }.update(horizontalAxis(controller), now)
                 if (seek != 0) {
                     Log.i(TAG, "thumbstick seek $seek")
@@ -495,7 +531,7 @@ internal class ScreenGripSystem(
                 }
             } else {
                 stickSeek.remove(id)
-                if (!watching && libraryScroll == 0) libraryScroll = when {
+                if (!watching && ownsCursor && libraryScroll == 0) libraryScroll = when {
                     justStickLeft(controller) -> -1
                     justStickRight(controller) -> 1
                     else -> 0
@@ -528,6 +564,7 @@ internal class ScreenGripSystem(
         for (id in actions.taps) handAims[id]?.let { onPress(it.xNorm, it.yNorm) }
         if (!watching && !screenHidden && libraryScroll != 0) onScroll(libraryScroll)
         if (!navigating) processOpenHands(inputs, now, sceneOwned.isNotEmpty() || sdkManipulating)
+        onPlayerPressed(railSelections[cursorDriver]?.target)
         onPanelCursor(panelHover?.takeIf { interactive })
         placeCursor(hovered?.takeIf { interactive || sceneHover != null },cursorOrigin)
     }
@@ -558,7 +595,8 @@ internal class ScreenGripSystem(
             }
         }
         val palms = OpenHandFrame.project(nativePalms, pose, viewerPose(), aimedSides)
-        val actions = openGestures.update(palms, true, pinching || gripping || visitorOwned, now, screenHidden, allowPause = watching || mediaActive())
+        val actions = openGestures.update(palms, true, pinching || gripping || visitorOwned, now, screenHidden,
+            allowPause = watching || mediaActive(), controlsActive = watching && (playerOpen || playerFraction > .001f))
         if (actions.pause) {
             onPause()
             autoHide.interact(now)
@@ -641,13 +679,12 @@ internal class ScreenGripSystem(
 
     private fun aimRail(inputPose: Pose, reveal: Boolean): Aim? {
         val pose = screen.getComponent<Transform>().transform
-        val rail = SideRailPlacement.beside(screenSize())
-        val right = pose.right().times(-1f)
-        val shift = if (reveal) Stage.PLAYER_SLIDE * 0.5f else (1f - playerFraction) * Stage.PLAYER_SLIDE
-        val center = pose.t.plus(right.times(rail.right + shift)).plus(pose.up().times(rail.up))
+        val placement = PlayerPlacement.inside(screenSize())
+        val shift = if (reveal) 0f else -(1f - playerFraction) * Stage.PLAYER_SLIDE
+        val center = pose.t.plus(pose.up().times(placement.up + shift))
             .plus(pose.forward().times(Stage.PLAYER_FORWARD))
-        val pad = if (reveal) REVEAL_PAD else 0f
-        return aimAt(inputPose, Pose(center, pose.q), Stage.PLAYER_WIDTH + pad, Stage.PLAYER_HEIGHT + pad, 0f)
+        val hit = aimAt(inputPose, Pose(center, pose.q), placement.width, placement.height, 0f) ?: return null
+        return hit.copy(onFace = hit.onFace && placement.contains(hit.yNorm, playerSettingsOpen()))
     }
 
     private fun scaleTo(width: Float, height: Float, baseWidth: Float, baseHeight: Float): Scale {
@@ -740,7 +777,7 @@ internal class ScreenGripSystem(
         var stickMeters: Float = 0f,
     )
 
-    private class Aim(
+    private data class Aim(
         val onFace: Boolean,
         val xNorm: Float,
         val yNorm: Float,

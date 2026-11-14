@@ -20,15 +20,21 @@ internal sealed interface ScenePickerAction {
     data class SelectLocation(val location: TheatreLocation) : ScenePickerAction
     data object ResetDefault : ScenePickerAction
     data object Done : ScenePickerAction
+    data object LaunchStarship : ScenePickerAction
+    data object StopStarship : ScenePickerAction
+    data object ReplayRoadster : ScenePickerAction
 }
 
 internal object ScenePickerControls {
     const val HEADER = .22f
-    const val ROW_HEIGHT = .18f
+    const val ROW_HEIGHT = .16f
     const val ENV_ROW_TOP = HEADER
     const val ENV_ROW_BOTTOM = ENV_ROW_TOP + ROW_HEIGHT
     const val ACTION_ROW_TOP = ENV_ROW_BOTTOM + .04f
     const val ACTION_ROW_BOTTOM = ACTION_ROW_TOP + ROW_HEIGHT
+    const val FLIGHT_ROW_TOP = ACTION_ROW_BOTTOM + .02f
+    const val FLIGHT_ROW_BOTTOM = FLIGHT_ROW_TOP + ROW_HEIGHT
+    const val ROADSTER_ROW_BOTTOM = FLIGHT_ROW_BOTTOM + .12f
 
     fun at(x: Float, y: Float): ScenePickerAction? {
         if (!x.isFinite() || !y.isFinite() || x < 0f || x >= 1f) return null
@@ -40,6 +46,10 @@ internal object ScenePickerControls {
         if (y in ACTION_ROW_TOP..ACTION_ROW_BOTTOM) {
             return if (x < 0.5f) ScenePickerAction.ResetDefault else ScenePickerAction.Done
         }
+        if (y >= FLIGHT_ROW_TOP && y < FLIGHT_ROW_BOTTOM) {
+            return if (x < .7f) ScenePickerAction.LaunchStarship else ScenePickerAction.StopStarship
+        }
+        if (y >= FLIGHT_ROW_BOTTOM && y < ROADSTER_ROW_BOTTOM) return ScenePickerAction.ReplayRoadster
         return null
     }
 }

@@ -1,5 +1,10 @@
 # 3D asset workflow
 
+The [Starship flight exhibit](art/STARSHIP.md) includes editable spacecraft,
+native launch/orbit/landing animation, Unreal imports and a labeled Blender
+preview. The [November 13 validation](art/validation/STARSHIP_20261113.md) also
+records the Roadster paint, reflection and surface-texture revision.
+
 The [combined asset and efficiency validation](art/validation/REMAINING_ASSETS_20261112.md)
 records the integrated build, package audit and automated Quest results.
 

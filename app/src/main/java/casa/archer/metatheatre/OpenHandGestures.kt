@@ -55,13 +55,27 @@ internal class OpenHandGestures {
     private var blockedUntil = 0L
     private var restoreBlockedUntil = 0L
     private var clapLatched = false
+    private var pauseNeedsLoweredHands = false
+    private var pauseLoweredSince: Long? = null
     private val depth = ScreenDepthGesture()
     private val stop = StopPalmGesture()
 
-    fun reset() { strokes.clear(); clap = null; spread = null; clapLatched = false; blockedUntil = 0L; restoreBlockedUntil = 0L; depth.reset(); stop.reset() }
+    fun reset() { strokes.clear(); clap = null; spread = null; clapLatched = false; blockedUntil = 0L; restoreBlockedUntil = 0L; pauseNeedsLoweredHands = false; pauseLoweredSince = null; depth.reset(); stop.reset() }
 
     fun update(hands: List<OpenHandInput>, watching: Boolean, pinchingOrGripping: Boolean, now: Long,
-               screenHidden: Boolean = false, allowPause: Boolean = watching): OpenHandActions {
+               screenHidden: Boolean = false, allowPause: Boolean = watching, controlsActive: Boolean = false): OpenHandActions {
+        // A relaxed pointing hand after Play is not a new stop command. Keep it
+        // disarmed through the panel's fade-out until the user lowers their hands.
+        if (controlsActive) { pauseNeedsLoweredHands = true; pauseLoweredSince = null }
+        else if (pauseNeedsLoweredHands) {
+            if (hands.any { it.raisedInView }) pauseLoweredSince = null
+            else {
+                val loweredSince = pauseLoweredSince ?: now.also { pauseLoweredSince = it }
+                if (now - loweredSince >= 300L) pauseNeedsLoweredHands = false
+            }
+        }
+        val canPause = allowPause && !pauseNeedsLoweredHands
+        if (!canPause || screenHidden) stop.reset()
         if (pinchingOrGripping) {
             depth.reset(); stop.reset()
             strokes.clear(); clap = null; spread = null; blockedUntil = now + 400L
@@ -74,11 +88,10 @@ internal class OpenHandGestures {
             return if (screenHidden) OpenHandActions(restore = depthAction.meters < -.01f)
                 else OpenHandActions(depthMeters = depthAction.meters)
         }
-        if (allowPause && !screenHidden && now >= blockedUntil && stop.update(hands, now)) {
+        if (canPause && !screenHidden && now >= blockedUntil && stop.update(hands, now)) {
             strokes.clear()
             return OpenHandActions(pause = true)
         }
-        if (!allowPause || screenHidden) stop.reset()
         if (screenHidden) {
             strokes.clear(); clap = null
             if (now < restoreBlockedUntil) { spread = null; return OpenHandActions() }

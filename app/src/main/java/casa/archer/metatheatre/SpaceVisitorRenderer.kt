@@ -24,6 +24,7 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
     private var earthCenter = EarthRenderer.CENTER
     private var earthViewer = EarthRenderer.SEAT_EYE
     private var zoomed = false
+    private var roadsterReviewPose: Pose? = null
     private fun place(entry: Entry, pose: Pose, scale: Float) {
         if (entry.placement.updatePose(pose)) entry.entity.setComponent(Transform(pose))
         if (entry.placement.updateScale(scale)) entry.entity.setComponent(Scale(Vector3(scale, scale, scale)))
@@ -71,13 +72,16 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
             val p = SpaceVisitors.progress(entry.visitor, elapsed - entry.phaseOffset)
             val inspected = inspection.overrides[entry.visitor.asset]
             val flight = entry.returning
-            val show = p != null || inspected != null || flight != null
+            val review = roadsterReviewPose?.takeIf { entry.visitor == SpaceVisitors.roadster }
+            val show = review != null || p != null || inspected != null || flight != null
             if (show != entry.visible) {
                 entry.entity.setComponent(Visible(show))
                 entry.visible = show
                 android.util.Log.i("TheatreVisitors", "flyby ${entry.visitor.asset} visible=$show")
             }
-            if (flight != null) {
+            if (review != null) {
+                place(entry, review, 1f)
+            } else if (flight != null) {
                 val orbit = VisitorTarget(entry.visitor.asset, pose(entry.visitor, p ?: .5),
                     entry.visitor.displayScale, radius(entry.visitor))
                 val frame = flight.frame(orbit, now)
@@ -104,11 +108,16 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
         }
     }
 
+    private fun pointerTargets() = entries.filter { it.visible && it.returning == null }.map { entry ->
+        VisitorTarget(entry.visitor.asset, entry.entity.getComponent<Transform>().transform,
+            entry.entity.getComponent<Scale>().scale.x, radius(entry.visitor))
+    }
+
+    fun pointerHit(pointer: VisitorPointer): VisitorHit? = if (elapsedClock.isPaused) null else
+        pointerTargets().mapNotNull { ScenePointer.hit(pointer, it) }.minByOrNull { it.distance }
+
     fun interact(pointers: List<VisitorPointer>, viewer: Pose, now: Long, blocked: Boolean): VisitorInputResult {
-        val targets = entries.filter { it.visible && it.returning == null }.map { entry ->
-            VisitorTarget(entry.visitor.asset, entry.entity.getComponent<Transform>().transform,
-                entry.entity.getComponent<Scale>().scale.x, radius(entry.visitor))
-        }
+        val targets = pointerTargets()
         val result = inspection.update(pointers, targets, viewer, now, blocked || elapsedClock.isPaused)
         result.returned.forEach { startReturn(it.target, it.velocity) }
         return result
@@ -128,6 +137,22 @@ internal class SpaceVisitorRenderer(clockMillis: () -> Long = SystemClock::elaps
         models.forEach { startReturn(it, Vector3(0f, 0f, 0f)) }
         update()
     }
+    fun replayRoadster() {
+        val entry = entries.firstOrNull { it.visitor == SpaceVisitors.roadster } ?: return
+        inspection.remove(entry.visitor.asset)
+        entry.returning = null
+        entry.phaseOffset = SpaceVisitors.replayOffset(entry.visitor, elapsedClock.elapsedSeconds())
+        update()
+        android.util.Log.i("TheatreVisitors", "Roadster replay requested paused=${elapsedClock.isPaused}")
+    }
     fun cancelGrab() { inspection.cancelGrab() }
+    /** Fixed geometry comparison, reachable only from the activity's debug launch. */
+    internal fun reviewRoadster(viewer: Pose, yaw: Float = 25f) {
+        val center = viewer.t + viewer.forward() * 5f - viewer.up() * .6f
+        roadsterReviewPose = Pose(center,
+            com.meta.spatial.core.Quaternion.fromDirection(viewer.t - center, Vector3(0f, 1f, 0f)) *
+                com.meta.spatial.core.Quaternion(pitch = 18f, yaw = yaw, roll = 0f))
+        update()
+    }
     fun release() { inspection.reset(); entries.clear() }
 }

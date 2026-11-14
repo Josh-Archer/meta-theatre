@@ -93,4 +93,27 @@ class ScreenDepthIntegrationTest {
         g.reset(); g.update(stop + restingOtherHand, true, false, 0)
         assertTrue(g.update(stop + restingOtherHand, true, false, 600).pause)
     }
+
+    @Test fun leavingPlaybackControlsCannotTurnThePointingHandIntoAStopCommand() {
+        val g = OpenHandGestures()
+        val stop = input(.5f).take(1)
+        // Play is pinched, then the user relaxes the same hand and points away.
+        g.update(stop, true, true, 0, controlsActive = true)
+        for (time in listOf(100L, 700L, 1500L, 5000L)) {
+            assertFalse(g.update(stop, true, false, time, controlsActive = true).pause)
+        }
+        // Hiding the controls must not arm a palm that is already being held.
+        for (time in listOf(5500L, 6100L, 7500L)) {
+            assertFalse(g.update(stop, true, false, time, controlsActive = false).pause)
+        }
+        // A brief tracking dropout does not count as lowering the hands.
+        g.update(emptyList(), true, false, 7600)
+        assertFalse(g.update(stop, true, false, 7700).pause)
+        // A fresh deliberate gesture still works after lowering the hands.
+        g.update(stop.map { it.copy(raisedInView = false) }, true, false, 8000)
+        g.update(stop.map { it.copy(raisedInView = false) }, true, false, 8350)
+        assertFalse(g.update(stop, true, false, 8400).pause)
+        assertTrue(g.update(stop, true, false, 9000).pause)
+        assertFalse(g.update(stop, true, false, 10000).pause)
+    }
 }

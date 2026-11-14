@@ -36,4 +36,12 @@ class SpaceVisitorsTest {
             assertTrue(v.durationSeconds >= 80.0)
         }
     }
+    @Test fun roadsterPresentsTheHoodAndCockpitToTheSeatThroughoutItsPass() {
+        for (i in 0..100) {
+            val pose = SpaceVisitors.pose(SpaceVisitors.roadster, i / 100.0)
+            val towardSeat = (EarthRenderer.SEAT_EYE - pose.t).normalize()
+            assertTrue("The car should expose its upper body, not its undertray",
+                pose.up().dot(towardSeat) > .15f)
+        }
+    }
 }

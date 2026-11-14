@@ -1,0 +1,18 @@
+{
+  "starship": {
+    "triangles": 26488,
+    "materials": 4
+  },
+  "super_heavy": {
+    "triangles": 86144,
+    "materials": 3
+  },
+  "starship_pad": {
+    "triangles": 7992,
+    "materials": 3
+  },
+  "starship_plume": {
+    "triangles": 256,
+    "materials": 1
+  }
+}

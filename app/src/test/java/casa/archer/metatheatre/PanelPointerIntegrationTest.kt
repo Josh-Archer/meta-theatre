@@ -40,11 +40,11 @@ class PanelPointerIntegrationTest {
         `when`(it.transport).thenReturn(MutableStateFlow(Transport(title="Movie",playWhenReady=true)))
         `when`(it.tracks).thenReturn(MutableStateFlow(PlaybackTracks()))
     }
-    @Test fun renderedSideMenuPointerSharesButtonCoordinatesAndClearsWhenHidden(){
+    @Test fun renderedPlaybackPointerSharesButtonCoordinatesAndClearsWhenHidden(){
         val player=player()
         val current=TheatreModel(RuntimeEnvironment.getApplication(),player,mock(PlexClient::class.java),Dispatchers.Unconfined)
         model=current;current.playerControlsOpen.value=true
-        compose.setContent{Box(Modifier.requiredSize(560.dp,1640.dp)){PlayerBar(current,player)}}
+        compose.setContent{Box(Modifier.requiredSize(960.dp,640.dp)){PlayerBar(current,player)}}
         val button=compose.onNodeWithText("Pause").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val root=compose.onRoot().fetchSemanticsNode().boundsInRoot
         val x=button.center.x/root.width;val y=button.center.y/root.height
@@ -52,14 +52,14 @@ class PanelPointerIntegrationTest {
             assertEquals(PlayerTarget.Button(PlayerControl.TOGGLE),current.playerHitTargets.at(x,y))
             current.panelCursor.value=PanelCursor(PointerPanel.PLAYER,x,y)
         }
-        compose.onNodeWithContentDescription("Side menu pointer").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Playback pointer").assertIsDisplayed()
         compose.runOnIdle{captureUiFixture(compose.activity,"side-menu-pointer.png")}
         compose.runOnIdle{current.playerControlsOpen.value=false}
-        compose.onNodeWithContentDescription("Side menu pointer").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Playback pointer").assertDoesNotExist()
         compose.runOnIdle{current.playerControlsOpen.value=true;current.panelCursor.value=null}
-        compose.onNodeWithContentDescription("Side menu pointer").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Playback pointer").assertDoesNotExist()
         compose.runOnIdle{current.panelCursor.value=PanelCursor(PointerPanel.LIBRARY,.5f,.5f)}
-        compose.onNodeWithContentDescription("Side menu pointer").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Playback pointer").assertDoesNotExist()
     }
     @Test fun selectorPointerAppearsOverTheLibraryButNotTheEmptyMovieGrabFrame(){
         val player=player()

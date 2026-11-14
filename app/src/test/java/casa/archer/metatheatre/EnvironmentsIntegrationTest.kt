@@ -85,6 +85,27 @@ class EnvironmentsIntegrationTest {
     }
 
     @Test
+    fun screenRotationSurvivesReloadResizeAndSeatChangesWithoutFlipping() {
+        val context = RuntimeEnvironment.getApplication()
+        for (location in TheatreLocation.entries) {
+            for (rotation in listOf(Quaternion(pitch = 0f, yaw = 180f, roll = 0f),
+                Quaternion(pitch = 12f, yaw = 137f, roll = -8f))) {
+                val expected = Pose(Vector3(.2f, 1.4f, 3f), rotation)
+                TheatreState(context).saveScreenPose(location, expected)
+                repeat(4) {
+                    val state = TheatreState(context)
+                    val actual = state.sceneSettings(location).screenPose
+                    assertTrue("Screen up must survive persistence", actual.up().dot(expected.up()) > .9999f)
+                    assertTrue("Screen facing must survive persistence", actual.forward().dot(expected.forward()) > .9999f)
+                    assertEquals(expected.t, actual.t)
+                    state.saveSize(location, ScreenSize(3f, 1.6875f))
+                    state.saveSeat(location, SeatSetting(yaw = 25f))
+                }
+            }
+        }
+    }
+
+    @Test
     fun perSceneSettingsPersistSeparatelyAndIndependently() {
         val context = RuntimeEnvironment.getApplication()
         val state = TheatreState(context)

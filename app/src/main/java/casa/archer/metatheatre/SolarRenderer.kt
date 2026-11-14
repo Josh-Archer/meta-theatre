@@ -208,7 +208,7 @@ class SolarRenderer(private val activity: TheatreActivity) {
         // Stock SDK PBR uses +dot(normal,sunDirection): point toward the same visible Sun.
         // The entire environment shares this one update per second, including the chair.
         activity.scene.setLightingEnvironment(
-            ambientColor = Vector3(0.06f * levels.ambient, 0.07f * levels.ambient, 0.09f * levels.ambient),
+            ambientColor = Vector3(0.22f * levels.ambient, 0.25f * levels.ambient, 0.30f * levels.ambient),
             sunColor = Vector3(1.4f * levels.sun, 1.32f * levels.sun, 1.15f * levels.sun),
             sunDirection = direction, environmentIntensity = 0.18f * levels.environment,
         )

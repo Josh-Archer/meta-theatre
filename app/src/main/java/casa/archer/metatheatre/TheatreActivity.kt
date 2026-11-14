@@ -20,6 +20,7 @@ import com.meta.spatial.isdk.IsdkGrabbable
 import com.meta.spatial.isdk.IsdkPanelDimensions
 import com.meta.spatial.isdk.IsdkPanelGrabHandle
 import com.meta.spatial.isdk.IsdkPanelResize
+import com.meta.spatial.isdk.IsdkDefaultCursorSystem
 import com.meta.spatial.isdk.IsdkSystem
 import com.meta.spatial.isdk.ResizeMode
 import com.meta.spatial.runtime.ReferenceSpace
@@ -74,6 +75,7 @@ class TheatreActivity : AppSystemActivity() {
         QuietCinema(model.state) { active ->
             solarRenderer?.setQuietCinema(active)
             spaceVisitorRenderer?.setPaused(active)
+            starshipRenderer?.setPaused(active || !immersiveFocused)
         }
     }
     private var ticker: Job? = null
@@ -81,6 +83,7 @@ class TheatreActivity : AppSystemActivity() {
     private var earthRenderer: EarthRenderer? = null
     private var solarRenderer: SolarRenderer? = null
     private var spaceVisitorRenderer: SpaceVisitorRenderer? = null
+    private var starshipRenderer: StarshipRenderer? = null
     private val solarUpdateSchedule = EarthUpdateSchedule()
     private val weatherViewSchedule = EarthUpdateSchedule()
     private var earthLoad: Job? = null
@@ -102,6 +105,7 @@ class TheatreActivity : AppSystemActivity() {
             },
             center = { place ->
                 grip?.cancelEarthGrab()
+                grip?.suspendInput()
                 spaceVisitorRenderer?.cancelGrab()
                 earthExploration.viewLocation(place, scene.getViewerPose())
                 syncEarthView()
@@ -151,7 +155,7 @@ class TheatreActivity : AppSystemActivity() {
         val diagnostic = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
             listOf("metatheatre.test_video", "metatheatre.test_weather", "metatheatre.test_earth_controls",
                 "metatheatre.test_location", "metatheatre.test_precise_location", "metatheatre.test_cloud_fixture",
-                "metatheatre.test_earth_registration", "metatheatre.test_earth_detail", "metatheatre.test_asset_lifecycle")
+                "metatheatre.test_earth_registration", "metatheatre.test_earth_detail", "metatheatre.test_asset_lifecycle", "metatheatre.test_starship", "metatheatre.test_roadster")
                 .any { intent.getBooleanExtra(it, false) }
         model.onPrepareScreen = { ensureVideo() }
         model.onWatching = { watching -> applyWatching(watching) }
@@ -162,6 +166,16 @@ class TheatreActivity : AppSystemActivity() {
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
         model.onViewTurn = ::turnView
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
+        model.onRoadsterReplay = {
+            if (immersiveFocused) {
+                frameSpaceExhibit()
+                spaceVisitorRenderer?.replayRoadster()
+            }
+        }
+        model.onStarshipFlight = { start ->
+            if (start && immersiveFocused) startStarshipFlight()
+            else if (!start) starshipRenderer?.stop()
+        }
         model.onEarthControl = ::onEarthControl
         earthExploration.setRealRotation(model.state.realEarthRotationEnabled)
         deviceLocation.setEnabled(!diagnostic && model.state.useCurrentLocation)
@@ -187,6 +201,7 @@ class TheatreActivity : AppSystemActivity() {
         model.onEarthZoom = { control ->
             if (immersiveFocused) {
                 grip?.cancelEarthGrab()
+                grip?.suspendInput()
                 spaceVisitorRenderer?.cancelGrab()
                 val viewer = scene.getViewerPose()
                 val before = earthExploration.zoom
@@ -270,7 +285,7 @@ class TheatreActivity : AppSystemActivity() {
         scene.enableHolePunching(true)
         scene.setColorSpace(com.meta.spatial.runtime.Scene.ColorSpace.REC709)
         scene.setLightingEnvironment(
-            ambientColor = Vector3(0.06f, 0.07f, 0.09f),
+            ambientColor = Vector3(0.22f, 0.25f, 0.30f),
             sunColor = Vector3(1.4f, 1.32f, 1.15f),
             sunDirection = (SolarSystem.sunPosition(Instant.now(), ZoneId.systemDefault()) - EarthRenderer.SEAT_EYE).normalize(),
             environmentIntensity = 0.18f,
@@ -288,6 +303,9 @@ class TheatreActivity : AppSystemActivity() {
             it.setWorldFrame(earthExploration.skyFrame)
             it.create()
             it.setPaused(quietCinema.active)
+        }
+        starshipRenderer = StarshipRenderer(publish = { model.starshipStatus.value = it }).also {
+            it.setPaused(quietCinema.active || !immersiveFocused)
         }
         earthLoad = scope.launch {
             val earth = EarthRenderer(this@TheatreActivity)
@@ -356,6 +374,9 @@ class TheatreActivity : AppSystemActivity() {
                 mediaActive = { screenPlayer.transport.value.title.isNotBlank() },
                 hasSubtitleCues = { screenPlayer.subtitleCues.value.isNotEmpty() },
                 onPoseSaved = { model.state.saveScreenPose(currentLocation, it) },
+                playbackNeedsAttention = { model.playerSettingsOpen.value || screenPlayer.transport.value.let { it.canRetry || it.reconnecting || !it.playWhenReady } },
+                playerSettingsOpen = { model.playerSettingsOpen.value },
+                onPlayerPressed = { model.playerPressedTarget.value = it },
             )
             grip = system
             system.screenHidden = model.screenHidden.value
@@ -368,6 +389,9 @@ class TheatreActivity : AppSystemActivity() {
                 it.setScenePointerDistance(15f)
             }
         }
+        // ScreenGrip owns the shared pointer. Rendering ISDK's per-hand cursors as
+        // well gives two competing pointers; its grab/resize systems remain active.
+        systemManager.findSystem<IsdkDefaultCursorSystem>().enableInput(false)
         Log.i(TAG, "theatre screen spawned")
         deviceLocation.setActive(immersiveFocused)
         model.sceneReady()
@@ -375,7 +399,48 @@ class TheatreActivity : AppSystemActivity() {
         runEarthControlsTest()
         runEarthRegistrationTest()
         runAssetLifecycleTest()
+        runStarshipTest()
+        runRoadsterReview()
         runLocationTest()
+    }
+
+    private fun runRoadsterReview() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_roadster", false)) return
+        scope.launch {
+            earthLoad?.join()
+            delay(2_000)
+            val viewer = scene.getViewerPose()
+            grip?.screenHidden = true
+            spaceVisitorRenderer?.reviewRoadster(viewer, intent.getFloatExtra("metatheatre.roadster_review_yaw", 25f))
+        }
+    }
+
+    private fun runStarshipTest() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_starship", false)) return
+        scope.launch {
+            try {
+                earthLoad?.join()
+                val origin = scene.getViewOrigin().copy()
+                val screenPose = screen?.getComponent<Transform>()?.transform
+                val screenSize = grip?.screenSize()
+                startStarshipFlight()
+                check(scene.getViewOrigin() == origin) { "Flight moved the view origin" }
+                check(screen?.getComponent<Transform>()?.transform == screenPose) { "Flight moved the screen" }
+                check(grip?.screenSize() == screenSize) { "Flight resized the screen" }
+                val renderer = checkNotNull(starshipRenderer)
+                renderer.stop()
+                for (second in listOf(0.0, 12.0, 25.0, 40.0, 78.0, 93.0, 103.0, 114.0)) {
+                    val frame = renderer.diagnosticFrame(second)
+                    check(frame.ship.t.x.isFinite() && frame.ship.t.y.isFinite() && frame.ship.t.z.isFinite())
+                    delay(3_000)
+                }
+                Log.i(TAG, "Starship diagnostic passed: fixed view and screen, launch, separation, orbit, descent, flip, landing and recovery")
+                renderer.stop()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) { Log.e(TAG, "Starship diagnostic failed", error) }
+        }
     }
 
     /** Exercise the real Above me button callback, only with existing user opt-in and permission. */
@@ -625,6 +690,8 @@ class TheatreActivity : AppSystemActivity() {
     override fun onSessionStateChanged(state: SessionState) {
         super.onSessionStateChanged(state)
         immersiveFocused = state == SessionState.FOCUSED
+        if (isdkSystem != null) systemManager.findSystem<IsdkDefaultCursorSystem>().enableInput(false)
+        starshipRenderer?.setPaused(quietCinema.active || !immersiveFocused)
         deviceLocation.setActive(immersiveFocused && screen != null)
         weather.setActive(immersiveFocused && !model.clearEarth.value)
         earthDetail.setActive(immersiveFocused || (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.getBooleanExtra("metatheatre.test_earth_detail", false)))
@@ -633,6 +700,7 @@ class TheatreActivity : AppSystemActivity() {
             locomotionTargets?.show(false)
             spaceVisitorRenderer?.cancelGrab()
             grip?.cancelEarthGrab()
+            grip?.suspendInput()
         }
         // Resample civil time immediately after focus/visibility changes, including headset wake.
         updateSolarEnvironment(force = true)
@@ -661,6 +729,7 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onPause() {
         immersiveFocused = false
+        starshipRenderer?.setPaused(true)
         deviceLocation.setActive(false)
         weather.setActive(false)
         earthDetail.setActive(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.getBooleanExtra("metatheatre.test_earth_detail", false))
@@ -697,6 +766,7 @@ class TheatreActivity : AppSystemActivity() {
         earthRenderer?.release()
         solarRenderer?.release()
         spaceVisitorRenderer?.release()
+        starshipRenderer?.release()
     }
 
     override fun onSceneTick() {
@@ -709,6 +779,7 @@ class TheatreActivity : AppSystemActivity() {
             if (earthExploration.ensureClearance(viewer,earthZoomClearance(viewer))) syncEarthView()
         }
         spaceVisitorRenderer?.update()
+        starshipRenderer?.update()
         if (immersiveFocused && earthRenderer?.target() != null && detailViewSchedule.shouldUpdate(SystemClock.uptimeMillis())) {
             earthDetail.view(WeatherPlace.viewed(earthExploration.earthPose(), scene.getViewerPose().t), earthExploration.detailZoom)
         }
@@ -789,8 +860,8 @@ class TheatreActivity : AppSystemActivity() {
                         }
                     },
                     display = DpDisplayOptions(
-                        width = 560f,
-                        height = 1640f,
+                        width = PlayerPlacement.WIDTH_DP,
+                        height = PlayerPlacement.HEIGHT_DP,
                         dpi = 160,
                     ),
                     rendering = UIPanelRenderOptions(PanelRenderMode.Mesh()),
@@ -884,6 +955,7 @@ class TheatreActivity : AppSystemActivity() {
     private fun applyLocationChange(location: TheatreLocation) {
         if (currentLocation == location && locationEntities.isNotEmpty()) return
         saveCurrentSceneSettings()
+        if (location != TheatreLocation.EARTH_ORBIT) starshipRenderer?.stop()
         locationEntities.forEach { it.destroy() }
         currentLocation = location
         model.state.currentLocation = location
@@ -915,6 +987,22 @@ class TheatreActivity : AppSystemActivity() {
         deviceLocation.manualView()
         earthExploration.spinBy(degrees)
         updateSolarEnvironment(force = true)
+    }
+
+    private fun startStarshipFlight() {
+        frameSpaceExhibit()
+        starshipRenderer?.start()
+    }
+
+    private fun frameSpaceExhibit() {
+        deviceLocation.manualView()
+        grip?.cancelEarthGrab()
+        spaceVisitorRenderer?.cancelGrab()
+        // Frame the exhibit around the current viewer without moving their seat or movie.
+        val viewer = scene.getViewerPose()
+        earthExploration.apply(EarthControl.HOME, viewer)
+        earthExploration.apply(EarthControl.EQUATOR, viewer)
+        syncEarthView()
     }
 
     private fun onEarthControl(control: EarthControl) {
@@ -954,6 +1042,8 @@ class TheatreActivity : AppSystemActivity() {
         solarRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.renderRadius)
         spaceVisitorRenderer?.setWorldFrame(earthExploration.skyFrame)
         spaceVisitorRenderer?.setEarthView(earthExploration.earthPose().t, scene.getViewerPose().t, earthExploration.zoom, earthExploration.renderRadius)
+        starshipRenderer?.setEarthView(earthExploration.skyFrame, earthExploration.earthPose().t,
+            scene.getViewerPose().t, earthExploration.renderRadius, earthExploration.zoom)
         updateSolarEnvironment(force = true)
     }
 
@@ -1030,8 +1120,12 @@ class TheatreActivity : AppSystemActivity() {
     }
 
     private fun onMoviePress() {
-        Log.i(TAG, "video toggle")
-        model.togglePlayback()
+        if (!model.playerControlsOpen.value) {
+            model.playerInteraction()
+        } else {
+            Log.i(TAG, "video toggle")
+            model.togglePlayback()
+        }
     }
 
     private fun onHeaderPress(x: Float) {

@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VisitorReturnIntegrationTest {
+    @Test fun replayImmediatelyShowsTheCarAtTheCenterOfAPassEvenDuringTheHiddenInterval() {
+        val car = SpaceVisitors.roadster
+        for (elapsed in listOf(0.0, 12.0, 110.0, 1000.0)) {
+            val offset = SpaceVisitors.replayOffset(car, elapsed)
+            assertEquals(.5, SpaceVisitors.progress(car, elapsed - offset)!!, .0001)
+            val position = SpaceVisitors.pose(car, SpaceVisitors.progress(car, elapsed - offset)!!).t
+            assertEquals(0f, position.x - EarthRenderer.SEAT_EYE.x, .001f)
+            assertNotNull(SpaceVisitors.progress(car, elapsed + 40.0 - offset))
+        }
+    }
     private fun target(visitor: SpaceVisitors.Visitor, progress: Double) = VisitorTarget(visitor.asset,
         SpaceVisitors.pose(visitor, progress), visitor.displayScale, if (visitor == SpaceVisitors.iss) 70f else 2.65f)
 

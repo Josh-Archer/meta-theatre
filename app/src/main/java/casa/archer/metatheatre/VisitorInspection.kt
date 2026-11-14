@@ -4,7 +4,7 @@ import com.meta.spatial.core.Pose
 import com.meta.spatial.core.Vector3
 
 internal data class VisitorTarget(val asset: String, val pose: Pose, val scale: Float, val radius: Float)
-internal data class VisitorPointer(val id: Long, val pose: Pose, val down: Boolean, val maxDistance: Float = Float.POSITIVE_INFINITY)
+internal data class VisitorPointer(val id: Long, val pose: Pose, val down: Boolean, val maxDistance: Float = Float.POSITIVE_INFINITY, val allowAction: Boolean = true)
 internal data class VisitorHit(val asset: String, val point: Vector3, val normal: Vector3, val distance: Float)
 internal data class VisitorToss(val target: VisitorTarget, val velocity: Vector3)
 internal data class VisitorInputResult(val owned: Set<Long> = emptySet(), val hover: VisitorHit? = null,
@@ -44,6 +44,10 @@ internal class VisitorInspection {
     val overrides: Map<String, VisitorTarget> get() = parked
 
     fun reset() { grab = null; parked.clear() } // held inputs must release before capturing again
+    fun remove(asset: String) {
+        if (grab?.target?.asset == asset) grab = null
+        parked.remove(asset)
+    }
     fun cancelGrab() {
         grab?.let { if (it.pulledAt == null) parked.remove(it.target.asset) else it.destination?.let { end -> parked[it.target.asset] = end } }
         grab = null
@@ -94,7 +98,7 @@ internal class VisitorInspection {
         }
         var hover: VisitorHit? = null
         if (!blocked) for (pointer in pointers) {
-            if (!valid(pointer.pose)) continue
+            if (!pointer.allowAction || !valid(pointer.pose)) continue
             var hit: VisitorHit? = null
             for (target in targets) {
                 if (returned.any { it.target.asset == target.asset }) continue

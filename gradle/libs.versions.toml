@@ -4,12 +4,15 @@ kotlin = "2.2.0"
 coreKtx = "1.13.1"
 composeActivity = "1.9.2"
 lifecycle = "2.8.6"
-composeBom = "2024.09.03"
+composeBom = "2025.04.01"
 media3 = "1.4.1"
 coroutines = "1.9.0"
-spatialsdk = "0.14.0"
+spatialsdk = "0.15.0"
+metavrxBom = "1.2026.1.0"
 
 [libraries]
+metavrx-bom = { module = "com.meta.metavrx:metavrx-bom", version.ref = "metavrxBom" }
+metavrx-uiset-compose = { module = "com.meta.metavrx.uiset:uiset-compose-compat" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "composeActivity" }
@@ -21,6 +24,7 @@ media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", versi
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 meta-spatial-sdk = { group = "com.meta.spatial", name = "meta-spatial-sdk", version.ref = "spatialsdk" }
+meta-spatial-sdk-uiset = { group = "com.meta.spatial", name = "meta-spatial-sdk-uiset", version.ref = "spatialsdk" }
 meta-spatial-sdk-compose = { group = "com.meta.spatial", name = "meta-spatial-sdk-compose", version.ref = "spatialsdk" }
 meta-spatial-sdk-toolkit = { group = "com.meta.spatial", name = "meta-spatial-sdk-toolkit", version.ref = "spatialsdk" }
 meta-spatial-sdk-vr = { group = "com.meta.spatial", name = "meta-spatial-sdk-vr", version.ref = "spatialsdk" }

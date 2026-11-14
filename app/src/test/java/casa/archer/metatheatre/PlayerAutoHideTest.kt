@@ -4,6 +4,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlayerAutoHideTest {
+    @Test fun aPlaybackFailureRevealsHiddenControlsAndKeepsRecoveryVisibleUntilResolved() {
+        val controls = PlayerAutoHide()
+        controls.setWatching(true, 0)
+        controls.tick(5_000)
+        assertFalse(controls.visible)
+        controls.tick(6_000, needsAttention = true)
+        assertTrue(controls.visible)
+        controls.tick(60_000, needsAttention = true)
+        assertTrue(controls.visible)
+        controls.tick(64_999)
+        assertTrue(controls.visible)
+        controls.tick(65_000)
+        assertFalse(controls.visible)
+    }
+
+    @Test fun aPlaybackFailureCannotRevealControlsOverTheLibraryOrAnExplicitlyHiddenScreen() {
+        val controls = PlayerAutoHide()
+        controls.setWatching(true, 0)
+        controls.tick(6_000, needsAttention = true)
+        controls.setWatching(false, 7_000)
+        controls.tick(60_000, needsAttention = true)
+        assertFalse(controls.visible)
+    }
+
     @Test fun hidesAtFiveSecondsAndTimeAloneNeverRevealsIt() {
         val controls = PlayerAutoHide()
         controls.setWatching(true, 10_000)

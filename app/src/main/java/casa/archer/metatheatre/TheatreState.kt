@@ -11,6 +11,9 @@ import org.json.JSONObject
 /** Device-local settings and bookmarks. Credentials and playback/poster URLs are never stored here. */
 internal class TheatreState(context: Context) {
     private val prefs = context.getSharedPreferences("theatre_state", Context.MODE_PRIVATE)
+    var preferredPlexServerId: String?
+        get() = prefs.getString("preferred_plex_server", null)
+        set(value) { prefs.edit { putString("preferred_plex_server", value) } }
     val clearEarth: Boolean get() = prefs.getBoolean("clear_earth", false)
     fun saveClearEarth(value: Boolean) { prefs.edit { putBoolean("clear_earth", value) } }
     val liveWeatherEnabled: Boolean
@@ -205,6 +208,6 @@ private fun poseFromJson(json: JSONObject, default: Pose): Pose = runCatching {
     val qw = json.optDouble("qw", default.q.w.toDouble()).toFloat()
     if (tx.isFinite() && ty.isFinite() && tz.isFinite() &&
         qx.isFinite() && qy.isFinite() && qz.isFinite() && qw.isFinite()) {
-        Pose(Vector3(tx, ty, tz), Quaternion(qx, qy, qz, qw))
+        Pose(Vector3(tx, ty, tz), Quaternion(w = qw, x = qx, y = qy, z = qz))
     } else default
 }.getOrDefault(default)

@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "casa.archer.metatheatre"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
@@ -78,6 +78,8 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.material3)
+    implementation(platform(libs.metavrx.bom))
+    implementation(libs.metavrx.uiset.compose)
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
@@ -86,7 +88,7 @@ dependencies {
 
     implementation(libs.meta.spatial.sdk)
     implementation(libs.meta.spatial.sdk.compose)
-    implementation("com.meta.spatial:meta-spatial-sdk-uiset:0.14.0")
+    implementation(libs.meta.spatial.sdk.uiset)
     implementation(libs.meta.spatial.sdk.toolkit)
     implementation(libs.meta.spatial.sdk.vr)
     implementation(libs.meta.spatial.sdk.isdk)

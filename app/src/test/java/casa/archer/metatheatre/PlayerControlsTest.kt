@@ -26,12 +26,18 @@ class PlayerControlsTest {
         assertEquals(initial, initial.resized(-1f))
     }
 
-    @Test fun railStaysOutsideTheVideoAndAtItsLowerEdgeAtEveryScreenSize() {
+    @Test fun controlsStayInsideTheMovieAndCompactSpaceRemainsTransparent() {
         for (width in listOf(ScreenSize.MIN_WIDTH, 2.8f, ScreenSize.MAX_WIDTH)) {
             val screen = ScreenSize(width, width * 9f / 16f)
-            val rail = SideRailPlacement.beside(screen)
-            assertEquals(width / 2f + Stage.PLAYER_GAP, rail.right - Stage.PLAYER_WIDTH / 2f, 0.00001f)
-            assertEquals(-screen.height / 2f, rail.up - Stage.PLAYER_HEIGHT / 2f, 0.00001f)
+            val placement = PlayerPlacement.inside(screen)
+            assertTrue(placement.width <= screen.width * .9f)
+            assertTrue(placement.up + placement.height / 2f < screen.height / 2f)
+            assertTrue(placement.up - placement.height / 2f > -screen.height / 2f)
+            assertEquals(placement.up - placement.height / 2f,
+                placement.contentUp(false) - placement.contentHeight(false) / 2f, .00001f)
+            assertFalse(placement.contains(.5f, false))
+            assertTrue(placement.contains(.9f, false))
+            assertTrue(placement.contains(.5f, true))
         }
     }
 
@@ -44,9 +50,7 @@ class PlayerControlsTest {
         for (refreshedBase in List(3) { sdkShape.copy() }) {
             val physical = refreshedBase.scaled(scaleX, scaleY)
             assertEquals(desired, physical)
-            val rail = SideRailPlacement.beside(physical)
-            assertEquals(desired.width / 2f + Stage.PLAYER_GAP,
-                rail.right - Stage.PLAYER_WIDTH / 2f, 0.00001f)
+            assertEquals(PlayerPlacement.inside(desired), PlayerPlacement.inside(physical))
         }
     }
 }
