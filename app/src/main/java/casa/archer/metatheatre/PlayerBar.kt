@@ -151,7 +151,7 @@ private fun PlayerContent(model: TheatreModel, player: ScreenPlayer) {
             val notice = movieQualityNotice(transport.quality, transport.sourceWidth, transport.sourceHeight,
                 transport.videoWidth, transport.videoHeight)
             Text(transport.detail.ifBlank { notice.ifBlank { transport.playbackMode } },
-                color = if (notice.isNotBlank()) Accent else Muted, fontSize = 24.sp,
+                color = if (transport.canRetry) Color(0xFFFFB4A8) else if (notice.isNotBlank()) Accent else Muted, fontSize = 24.sp,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(12.dp))
             val audio = tracks.audio.firstOrNull { it.id == tracks.selectedAudioId }?.label ?: "Default"

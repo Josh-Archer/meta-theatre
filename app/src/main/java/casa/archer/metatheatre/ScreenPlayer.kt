@@ -83,6 +83,7 @@ class ScreenPlayer internal constructor(
     private var reconnectAttempts = 0
     private var healthySinceMs = 0L
     internal var onReconnect: (() -> Unit)? = null
+    internal var onFileUnavailable: ((String) -> Unit)? = null
     @Volatile private var lastColorLabel = ""
     @Volatile private var playbackGeneration = 0
 
@@ -580,10 +581,13 @@ class ScreenPlayer internal constructor(
             }
             reconnectFailed(when (failure) {
                 PlaybackFailure.AUTHORIZATION -> "Plex denied this stream. Reconnect to refresh server access."
-                PlaybackFailure.MISSING -> "This file is unavailable on the Plex server."
+                PlaybackFailure.MISSING -> "File missing on server. Try another library."
                 else -> "Playback failed (${error.errorCodeName}). Choose Reconnect to retry."
             })
             publish()
+            if (failure == PlaybackFailure.MISSING && item?.sourceKind == SourceKind.PLEX) {
+                onFileUnavailable?.invoke(transport.value.detail)
+            }
         }
     }
 

@@ -487,7 +487,8 @@ private fun ShelfFooter(total: Int, window: ShelfWindow, model: TheatreModel) {
             modifier = Modifier.fillMaxHeight().weight(PosterGrid.PREV_X),
         ) {}
         SceneControl.entries.forEachIndexed { index, control ->
-            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]), highlighted = control == SceneControl.EARTH) {
+            ZoneButton(control.label, Modifier.fillMaxHeight().weight(SceneControls.widths[index]),
+                acceptPointerClick = control == SceneControl.SCENES, highlighted = control == SceneControl.EARTH) {
                 model.sceneControlPress(SceneControls.center(control), .96f)
             }
         }
@@ -605,6 +606,7 @@ private fun ViewingPresetsMenu(model: TheatreModel) {
 
 @Composable
 private fun ScenePickerMenu(model: TheatreModel) {
+    val flightStatus by model.starshipStatus.collectAsState()
     val currentLocation by model.currentLocation.collectAsState()
     Column(Modifier.fillMaxSize().background(Panel).border(4.dp, Accent)) {
         Column(
@@ -628,7 +630,7 @@ private fun ScenePickerMenu(model: TheatreModel) {
                         .clip(RoundedCornerShape(16.dp))
                         .background(if (isSelected) Accent else Zone)
                         .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Ink else Color.Transparent, RoundedCornerShape(16.dp))
-                        .semantics { role = Role.Button; onClick { model.selectLocation(location); true } },
+                        .clickable(role = Role.Button) { model.selectLocation(location) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -640,6 +642,7 @@ private fun ScenePickerMenu(model: TheatreModel) {
                 }
             }
         }
+        Spacer(Modifier.height((PosterGrid.PANEL_DP * .04f).dp))
         Row(
             Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)
                 .padding(horizontal = 24.dp, vertical = 8.dp),
@@ -648,14 +651,20 @@ private fun ScenePickerMenu(model: TheatreModel) {
             ZoneButton("Reset to default", Modifier.fillMaxHeight().weight(1f)) {
                 model.resetCurrentLocationToDefault()
             }
-            ZoneButton("Back to library", Modifier.fillMaxHeight().weight(1f)) {
+            ZoneButton("Back to library", Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
                 model.closeScenePicker()
             }
         }
-        Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Spacer(Modifier.height((PosterGrid.PANEL_DP * .02f).dp))
+        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)) {
+            ZoneButton("Launch / replay Starship", Modifier.fillMaxHeight().weight(.7f), acceptPointerClick = true) { model.starshipFlight(true) }
+            ZoneButton("End flight", Modifier.fillMaxHeight().weight(.3f), acceptPointerClick = true) { model.starshipFlight(false) }
+        }
+        ZoneButton("Show / replay Roadster", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .12f).dp),
+            acceptPointerClick = true) { model.replayRoadster() }
+        Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             Text(
-                "Seat position and screen settings are saved separately for each environment.\n" +
-                    "Use 'Reset to default' to restore the initial preset.",
+                "$flightStatus\nStaged flight · Earth view · pauses during Quiet cinema",
                 color = Muted,
                 fontSize = 22.sp,
                 textAlign = TextAlign.Center,

@@ -62,7 +62,9 @@ internal class PlayerAutoHide {
         interact(nowMs)
     }
 
-    fun tick(nowMs: Long) {
+    fun tick(nowMs: Long, needsAttention: Boolean = false) {
+        // A failed stream can leave the video black. Keep its explanation and exit visible.
+        if (needsAttention) interact(nowMs)
         if (enabled && selecting.isEmpty() && nowMs - lastInteractionMs >= IDLE_MS) visible = false
     }
 

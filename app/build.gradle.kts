@@ -86,7 +86,7 @@ dependencies {
 
     implementation(libs.meta.spatial.sdk)
     implementation(libs.meta.spatial.sdk.compose)
-    implementation("com.meta.spatial:meta-spatial-sdk-uiset:0.14.0")
+    implementation(libs.meta.spatial.sdk.uiset)
     implementation(libs.meta.spatial.sdk.toolkit)
     implementation(libs.meta.spatial.sdk.vr)
     implementation(libs.meta.spatial.sdk.isdk)

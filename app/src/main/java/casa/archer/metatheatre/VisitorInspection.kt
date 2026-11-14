@@ -44,6 +44,10 @@ internal class VisitorInspection {
     val overrides: Map<String, VisitorTarget> get() = parked
 
     fun reset() { grab = null; parked.clear() } // held inputs must release before capturing again
+    fun remove(asset: String) {
+        if (grab?.target?.asset == asset) grab = null
+        parked.remove(asset)
+    }
     fun cancelGrab() {
         grab?.let { if (it.pulledAt == null) parked.remove(it.target.asset) else it.destination?.let { end -> parked[it.target.asset] = end } }
         grab = null

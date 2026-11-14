@@ -38,6 +38,173 @@ class PlexRecoveryIntegrationTest {
     }
     @After fun finish() { Dispatchers.resetMain() }
 
+    @Test fun discoveryReachesPublicConnectionAfterFourUnavailableInterfacesAndSkipsDuplicates() {
+        val http = MockWebServer().apply { start() }
+        try {
+            val client = PlexClient(context, http.url("/").toString().trimEnd('/')).apply { token = "synthetic" }
+            val routes = listOf("bad1", "bad1", "bad2", "bad3", "bad4", "public")
+            val connections = routes.joinToString(",") { """{"uri":"${http.url("/$it")}","local":false,"relay":false}""" }
+            http.enqueue(MockResponse().setBody("""[{"name":"Lab","provides":"server","clientIdentifier":"lab","accessToken":"synthetic","connections":[$connections]}]"""))
+            repeat(4) { http.enqueue(MockResponse().setResponseCode(503)) }
+            http.enqueue(MockResponse().setBody("<MediaContainer machineIdentifier=\"lab\"/>"))
+            assertEquals(listOf(PlexServer("Lab", http.url("/public").toString(), "synthetic", "lab")), client.servers())
+            http.takeRequest()
+            assertEquals(listOf("/bad1/identity", "/bad2/identity", "/bad3/identity", "/bad4/identity", "/public/identity"),
+                (1..5).map { http.takeRequest().path })
+        } finally { http.shutdown() }
+    }
+
+    @Test fun selectingAServerScopesRecentCardsAndSurvivesRestartWithoutRestoringTheOtherServer() {
+        val plex = mock(PlexClient::class.java)
+        val nas = PlexServer("NAS", "https://nas.invalid", "synthetic", "nas")
+        val lab = PlexServer("Lab", "https://lab.invalid", "synthetic", "lab")
+        val section = PlexSection("1", "TV", "show")
+        // Server-local keys can collide; they must never be remapped between servers.
+        val nasItem = PlexItem("42", "NAS episode", "", "episode", viewOffsetMs = 42_000, durationMs = 120_000, lastViewedAtMs = 1000)
+        val labItem = nasItem.copy(title = "Lab episode", viewOffsetMs = 15_000)
+        `when`(plex.token).thenReturn("synthetic")
+        `when`(plex.servers()).thenReturn(listOf(nas, lab))
+        `when`(plex.recentlyViewed(nas)).thenReturn(listOf(nasItem))
+        `when`(plex.recentlyViewed(lab)).thenReturn(listOf(labItem))
+        `when`(plex.sections(lab)).thenReturn(listOf(section))
+        `when`(plex.playable(lab, labItem)).thenReturn(Playable("Lab episode", "https://lab.invalid/movie", "https://lab.invalid/hls", emptyMap()))
+        val screen = ScreenPlayer(context)
+        var model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        try {
+            model.start()
+            model.openServer(lab)
+            model.openLibrary()
+            val home = model.browse.value as Browse.Home
+            assertEquals(listOf(lab.id), home.videos.map { it.server?.id })
+            assertTrue(shelfTiles(home)!!.single().subtitle.contains("Lab"))
+            model.release()
+            // An old active bookmark must not defeat the explicitly selected server.
+            val state = TheatreState(context)
+            state.history.begin(Bookmark(MovieKey(nas.id, "42"), "NAS episode", "", "episode", "", 42_000, 120_000, 2000))
+            state.saveHistory()
+            model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+            model.start()
+            val restored = model.browse.value as Browse.Home
+            assertEquals(listOf(lab.id), restored.videos.map { it.server?.id })
+            assertNull(TheatreState(context).history.active)
+            assertEquals(42_000L, TheatreState(context).history.find(MovieKey(nas.id, "42"))!!.positionMs)
+            restored.onOpen(restored.videos.single())
+            verify(plex).playable(lab, labItem)
+            assertEquals(MovieKey(lab.id, "42"), TheatreState(context).history.active)
+            assertEquals(15_000L, screen.transport.value.positionMs)
+            assertTrue(mockingDetails(plex).invocations.none {
+                it.method.name == "playable" && it.arguments.firstOrNull() == nas
+            })
+        } finally { model.release(); screen.release() }
+    }
+
+    @Test fun unavailablePreferredServerOffersAChoiceWithoutFallingBackOrLosingItsBookmark() {
+        val plex = mock(PlexClient::class.java)
+        val nas = PlexServer("NAS", "https://nas.invalid", "synthetic", "nas")
+        val state = TheatreState(context)
+        state.preferredPlexServerId = "lab"
+        val key = MovieKey("lab", "42")
+        state.history.begin(Bookmark(key, "Episode", "", "episode", "", 42_000, 120_000, 1))
+        state.saveHistory()
+        `when`(plex.token).thenReturn("synthetic")
+        `when`(plex.servers()).thenReturn(listOf(nas))
+        doAnswer { throw PlexException("Server offline", PlexFailure.CONNECTION) }.`when`(plex).sections(nas)
+        val screen = ScreenPlayer(context)
+        val model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        try {
+            model.start()
+            assertEquals(listOf(nas), (model.browse.value as Browse.Servers).servers)
+            assertTrue(model.error.value!!.contains("selected Plex server is unavailable"))
+            assertEquals("", screen.transport.value.title)
+            model.openServer(nas)
+            assertEquals("lab", TheatreState(context).preferredPlexServerId)
+            assertEquals(42_000L, TheatreState(context).history.find(key)!!.positionMs)
+            verify(plex, never()).recentlyViewed(nas)
+        } finally { model.release(); screen.release() }
+    }
+
+    @Test fun metadataChecksFileAvailabilityBeforeOpeningThePlayerAndAllowsUnreportedAvailability() {
+        val http = MockWebServer().apply { start() }
+        try {
+            val client = PlexClient(context)
+            val server = PlexServer("Test server", http.url("/").toString(), "synthetic-token")
+            val item = PlexItem("42", "Movie", "", "movie")
+            for (availability in listOf("\"exists\":false,", "\"accessible\":false,", "\"exists\":true,\"accessible\":true,", "")) {
+                http.enqueue(MockResponse().setBody("""{"MediaContainer":{"Metadata":[{"Media":[{"width":3840,"height":2160,"Part":[{${availability}"key":"/library/parts/1/file.mkv"}]}]}]}}"""))
+                if (availability.contains("false")) {
+                    val failure = assertThrows(PlexException::class.java) { client.playable(server, item) }
+                    assertEquals(PlexFailure.MISSING, failure.failure)
+                    assertTrue(failure.message!!.contains("Test server"))
+                } else {
+                    assertEquals(3840, client.playable(server, item).sourceWidth)
+                }
+                assertEquals("1", http.takeRequest().requestUrl!!.queryParameter("checkFiles"))
+            }
+        } finally { http.shutdown() }
+    }
+
+    @Test fun missingSavedMovieStaysInTheLibraryAndCannotRestoreIntoTheSameFailureLoop() {
+        val plex = mock(PlexClient::class.java)
+        val server = PlexServer("Test server", "https://example.invalid", "synthetic", "server")
+        val otherServer = server.copy(id = "other", name = "Other server")
+        val key = MovieKey(server.id, "42")
+        val state = TheatreState(context)
+        state.history.begin(Bookmark(key, "Movie", "", "movie", "", 42_000, 120_000, 1))
+        state.saveHistory()
+        `when`(plex.token).thenReturn("synthetic")
+        `when`(plex.servers()).thenReturn(listOf(server, otherServer))
+        `when`(plex.recentlyViewed(server)).thenReturn(emptyList())
+        val savedItem = PlexItem("42", "Movie", "", "movie", viewOffsetMs = 42_000, durationMs = 120_000)
+        doAnswer { throw PlexException("File unavailable on Test server. Choose another library.", PlexFailure.MISSING) }
+            .`when`(plex).playable(server, savedItem)
+        val screen = ScreenPlayer(context)
+        val model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        try {
+            model.start()
+            assertTrue(model.libraryOpen.value)
+            assertEquals(listOf(server, otherServer), (model.browse.value as Browse.Servers).servers)
+            assertEquals("", screen.transport.value.title)
+            assertTrue(model.error.value!!.contains("File unavailable"))
+            assertFalse(model.plexReconnectAvailable.value)
+            assertFalse(model.loading.value)
+            assertNull(TheatreState(context).history.active)
+            assertEquals(42_000L, TheatreState(context).history.find(key)!!.positionMs)
+            model.openLibraries()
+            verify(plex, times(1)).playable(server, savedItem)
+        } finally { model.release(); screen.release() }
+    }
+
+    @Test fun fileDisappearingDuringPlaybackReturnsToLibraryAndPreservesProgress() {
+        val plex = mock(PlexClient::class.java)
+        val native = mock(ExoPlayer::class.java)
+        lateinit var listener: Player.Listener
+        doAnswer { listener = it.getArgument(0); null }.`when`(native).addListener(any(Player.Listener::class.java))
+        val screen = ScreenPlayer(context) { _, _, _ -> native }
+        val model = TheatreModel(context, screen, plex, Dispatchers.Unconfined)
+        val server = PlexServer("Test", "https://example.invalid", "synthetic", "server")
+        val section = PlexSection("1", "Movies", "movie")
+        val item = PlexItem("42", "Movie", "", "movie", viewOffsetMs = 42_000, durationMs = 120_000)
+        `when`(plex.library(server, section)).thenReturn(listOf(item))
+        `when`(plex.playable(server, item)).thenReturn(Playable("Movie", "https://example.invalid/movie.mp4", "https://example.invalid/hls", emptyMap()))
+        try {
+            screen.attach(mock(Surface::class.java))
+            model.openSection(server, section)
+            (model.browse.value as Browse.Items).onOpen(item)
+            assertFalse(model.libraryOpen.value)
+            val failure = androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException(
+                404, "Not found", null, emptyMap(), DataSpec(android.net.Uri.parse("https://example.invalid/video")), byteArrayOf())
+            listener.onPlayerError(PlaybackException("Missing", failure, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+            assertTrue(model.libraryOpen.value)
+            assertTrue(model.browse.value is Browse.Home)
+            assertEquals("", screen.transport.value.title)
+            assertTrue(model.error.value!!.contains("File missing"))
+            assertNull(TheatreState(context).history.active)
+            assertEquals(42_000L, TheatreState(context).history.recent().single().positionMs)
+            verify(native).stop()
+            verify(native, times(1)).prepare()
+        } finally { model.release(); screen.release() }
+    }
+
     @Test fun actualHttpFailuresDistinguishAccountRelinkFromServerAccessAndNeverExposeResponseBodies() {
         val http = MockWebServer().apply { start() }
         try {
@@ -124,7 +291,48 @@ class PlexRecoveryIntegrationTest {
             assertEquals(42_000L, positions.allValues.last().toLong())
             assertFalse(screen.transport.value.playWhenReady)
             assertEquals("Original", screen.transport.value.playbackMode)
+            doAnswer { throw PlexException("File unavailable", PlexFailure.MISSING) }
+                .`when`(plex).playable(refreshed, item)
+            model.reconnectPlex()
+            assertTrue(model.libraryOpen.value)
+            assertEquals("File unavailable", model.error.value)
+            assertNull(TheatreState(context).history.active)
+            assertEquals(42_000L, TheatreState(context).history.recent().single().positionMs)
         } finally { model.release(); screen.release() }
+    }
+
+    @Test fun missingMediaKeepsItsExplanationAndExitVisibleWithoutRetryingOrLosingTheBookmark() {
+        val http = MockWebServer().apply { start() }
+        val native = mock(ExoPlayer::class.java)
+        lateinit var listener: Player.Listener
+        doAnswer { listener = it.getArgument(0); null }.`when`(native).addListener(any(Player.Listener::class.java))
+        val screen = ScreenPlayer(context) { _, _, _ -> native }
+        val controls = PlayerAutoHide().apply { setWatching(true, 0); tick(5_000) }
+        try {
+            screen.attach(mock(Surface::class.java))
+            screen.play(Playable("Test", "https://example.invalid/movie.mp4", "https://example.invalid/stream.m3u8", emptyMap()), 42_000)
+            http.enqueue(MockResponse().setResponseCode(404).setBody("private-server-path"))
+            val data = DefaultHttpDataSource.Factory().createDataSource()
+            val failure = try {
+                data.open(DataSpec(android.net.Uri.parse(http.url("/video").toString())))
+                error("Expected HTTP 404")
+            } catch (problem: java.io.IOException) { problem } finally { data.close() }
+            listener.onPlayerError(PlaybackException("private URL", failure, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+            val state = screen.transport.value
+            assertEquals("File missing on server. Try another library.", state.detail)
+            assertEquals(42_000L, state.positionMs)
+            assertEquals("Original", state.playbackMode)
+            assertTrue(state.canRetry)
+            assertFalse(state.reconnecting)
+            controls.tick(60_000, state.canRetry || state.reconnecting)
+            assertTrue(controls.visible)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(8))
+            verify(native, times(1)).prepare()
+            screen.close()
+            controls.setWatching(false, 61_000)
+            controls.tick(70_000, screen.transport.value.canRetry || screen.transport.value.reconnecting)
+            assertFalse(controls.visible)
+        } finally { screen.release(); http.shutdown() }
     }
 
     @Test fun accountFailureKeepsHistoryAndTokenAndOffersRelinkWhileOfflineFailureOffersReconnect() {

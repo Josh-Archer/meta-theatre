@@ -17,7 +17,9 @@ object SolarSystem {
     // One astronomical unit at the same mean-radius scale as the planets.
     const val SUN_DISTANCE = (149_597_870.7 * METRES_PER_KM).toFloat()
     const val SUN_RENDER_DISTANCE = 80_000f
-    const val NEAR_CLIP = 0.05f
+    // Preserve the distant sky while giving thin vehicle surfaces three times
+    // the depth separation of the old 5 cm near plane. Panels stay >= 1.5 m away.
+    const val NEAR_CLIP = 0.15f
     const val FAR_CLIP = 120_000f
     const val STAR_RADIUS = 110_000f
     const val RING_INNER = 74_500f / 58_232f
