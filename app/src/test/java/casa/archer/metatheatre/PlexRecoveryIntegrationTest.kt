@@ -38,6 +38,22 @@ class PlexRecoveryIntegrationTest {
     }
     @After fun finish() { Dispatchers.resetMain() }
 
+    @Test fun discoveryReachesPublicConnectionAfterFourUnavailableInterfacesAndSkipsDuplicates() {
+        val http = MockWebServer().apply { start() }
+        try {
+            val client = PlexClient(context, http.url("/").toString().trimEnd('/')).apply { token = "synthetic" }
+            val routes = listOf("bad1", "bad1", "bad2", "bad3", "bad4", "public")
+            val connections = routes.joinToString(",") { """{"uri":"${http.url("/$it")}","local":false,"relay":false}""" }
+            http.enqueue(MockResponse().setBody("""[{"name":"Lab","provides":"server","clientIdentifier":"lab","accessToken":"synthetic","connections":[$connections]}]"""))
+            repeat(4) { http.enqueue(MockResponse().setResponseCode(503)) }
+            http.enqueue(MockResponse().setBody("<MediaContainer machineIdentifier=\"lab\"/>"))
+            assertEquals(listOf(PlexServer("Lab", http.url("/public").toString(), "synthetic", "lab")), client.servers())
+            http.takeRequest()
+            assertEquals(listOf("/bad1/identity", "/bad2/identity", "/bad3/identity", "/bad4/identity", "/public/identity"),
+                (1..5).map { http.takeRequest().path })
+        } finally { http.shutdown() }
+    }
+
     @Test fun selectingAServerScopesRecentCardsAndSurvivesRestartWithoutRestoringTheOtherServer() {
         val plex = mock(PlexClient::class.java)
         val nas = PlexServer("NAS", "https://nas.invalid", "synthetic", "nas")

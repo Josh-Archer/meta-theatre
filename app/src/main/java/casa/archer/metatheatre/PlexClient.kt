@@ -351,7 +351,8 @@ class PlexClient(context: Context, private val accountEndpoint: String = PLEX) {
 
     private fun firstReachable(connections: List<JSONObject>, token: String): String? {
         var lastError: String? = null
-        for (connection in connections.take(4)) {
+        // Virtual interfaces can precede the server's working public URL.
+        for (connection in connections.distinctBy { it.optString("uri").trimEnd('/') }) {
             val uri = connection.optString("uri")
             if (uri.isBlank()) continue
             try {

@@ -109,3 +109,34 @@ Validation of the latest build:
 Actual Roadster visibility/flicker and Plex video/audio are pending the next
 wearer check. The earlier missing-file recovery and quaternion fixes remain in
 this build. Raw local evidence is ignored under `playback-20261113/`.
+
+## Follow-up: discovery cutoff and shared pointer
+
+The user next confirmed the Roadster was visible but still striped, reported a
+jumping pointer, and saw only homenas in the server list. Discovery stopped after
+four advertised connection addresses. homelab0's first four were unreachable
+from the headset, while its public addresses occurred later in the list. The
+client now tries all distinct advertised addresses in the existing priority
+order. It retains TLS validation, authentication and per-request timeouts. A
+real HTTP regression reaches the fifth distinct connection after four failures,
+without retrying a duplicated address. At 22:03:51 device time, the installed
+app completed discovery with homelab0 selected; it no longer entered the
+unavailable-preferred-server branch. Actual movie playback remains pending.
+
+The shared panel cursor formerly selected the closest ray anew every frame.
+It now keeps the current input until another hand/controller explicitly presses
+or the current ray leaves for 150 ms. This prevents tiny depth differences and
+brief tracking loss from repeatedly swapping the cursor between hands. Input
+gestures remain independent; replay tests cover distance oscillation, explicit
+selection, tracking loss and handoff. Panel intersections are reused within a
+frame. Physical tracking jitter and wearer comfort still need confirmation.
+
+All **288 tests passed**, debug assembly passed, lint zero errors/62 warnings.
+The installed/local APK SHA-256 was
+`26978093b499c315e5f578d20297030d6b1899eac0d12eb83aa62f996a684981`.
+
+The wearer then held the Roadster in view for a Meta Cam capture. The resulting
+`roadster-wearer-visible.jpg` clearly shows red/black bands across its body. The
+near-plane change did not resolve the defect. ADB display capture stayed black;
+the Meta Cam image is actual headset evidence and stays local. Geometry/native
+material investigation continues; no visual fix is claimed here.
