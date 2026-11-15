@@ -40,8 +40,8 @@ internal object EarthOrbit {
 internal object SpaceshipCabin {
     const val defaultScreenWidth = 3.2f
     val defaultScreenHeight = 3.2f * 9f / 16f
-    val defaultScreenPose = Pose(Vector3(0f, 1.35f, 3.2f), Quaternion(pitch = 0f, yaw = 180f, roll = 0f))
-    val defaultSeat = SeatSetting(0f, 0f, 0f, 0f)
+    val defaultScreenPose = Pose(Vector3(0f, 2.15f, -6.95f), Quaternion())
+    val defaultSeat = SeatSetting(0f, 0f, 0f, 180f)
 
     val screenWidth get() = defaultScreenWidth
     val screenHeight get() = defaultScreenHeight
@@ -69,10 +69,10 @@ internal fun defaultSceneSettings(location: TheatreLocation): SceneSettings = Sc
     seat = defaultSeatSetting(location),
 )
 
-fun buildLocation(location: TheatreLocation): List<Entity> {
+fun buildLocation(location: TheatreLocation, shipYaw: Float = 0f): List<Entity> {
     return when (location) {
         TheatreLocation.EARTH_ORBIT -> buildEarthOrbit()
-        TheatreLocation.SPACESHIP_CABIN -> buildSpaceshipCabin()
+        TheatreLocation.SPACESHIP_CABIN -> buildSpaceshipCabin(shipYaw)
     }
 }
 
@@ -80,8 +80,14 @@ private fun buildEarthOrbit(): List<Entity> {
     return listOf(chair())
 }
 
-private fun buildSpaceshipCabin(): List<Entity> {
-    return listOf(chair(), hull())
+private fun buildSpaceshipCabin(shipYaw: Float): List<Entity> {
+    return listOf(chair(), hull()).also { applyCabinHeading(it, shipYaw) }
+}
+
+internal fun applyCabinHeading(entities: List<Entity>, yaw: Float) {
+    entities[0].setComponent(Transform(CabinLayout.rotate(
+        Pose(Vector3(0f, .39f, .12f), Quaternion(0f, 180f, 0f)), yaw)))
+    entities[1].setComponent(Transform(CabinLayout.rotate(Pose(), yaw)))
 }
 
 internal val CHAIR_URI = "lounge_chair.glb".toUri()

@@ -69,10 +69,10 @@ class EnvironmentsIntegrationTest {
         assertNotEquals(earthOrbitDefaults.screenSize.width, spaceshipCabinDefaults.screenSize.width)
 
         assertEquals(2.5f, earthOrbitDefaults.screenPose.t.z, 0.01f)
-        assertEquals(3.2f, spaceshipCabinDefaults.screenPose.t.z, 0.01f)
+        assertEquals(-6.95f, spaceshipCabinDefaults.screenPose.t.z, 0.01f)
 
         assertEquals(0f, earthOrbitDefaults.seat.yaw, 0.01f)
-        assertEquals(0f, spaceshipCabinDefaults.seat.yaw, 0.01f)
+        assertEquals(180f, spaceshipCabinDefaults.seat.yaw, 0.01f)
 
         assertEquals("lounge_chair.glb", CHAIR_URI.toString())
         assertEquals("hull.glb", HULL_URI.toString())

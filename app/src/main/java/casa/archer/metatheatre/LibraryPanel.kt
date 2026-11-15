@@ -656,15 +656,38 @@ private fun ScenePickerMenu(model: TheatreModel) {
             }
         }
         Spacer(Modifier.height((PosterGrid.PANEL_DP * .02f).dp))
-        Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)) {
-            ZoneButton("Launch / replay Starship", Modifier.fillMaxHeight().weight(.7f), acceptPointerClick = true) { model.starshipFlight(true) }
-            ZoneButton("End flight", Modifier.fillMaxHeight().weight(.3f), acceptPointerClick = true) { model.starshipFlight(false) }
+        if (currentLocation == TheatreLocation.SPACESHIP_CABIN) {
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)) {
+                CabinSeat.entries.forEach { seat ->
+                    ZoneButton(seat.label, Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
+                        model.cabinAction(ScenePickerAction.Sit(seat))
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .12f).dp)) {
+                ZoneButton("Ship left 15°", Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
+                    model.cabinAction(ScenePickerAction.TurnShip(-CabinLayout.TURN_DEGREES))
+                }
+                ZoneButton("Pin to wall", Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
+                    model.cabinAction(ScenePickerAction.PinScreen)
+                }
+                ZoneButton("Ship right 15°", Modifier.fillMaxHeight().weight(1f), acceptPointerClick = true) {
+                    model.cabinAction(ScenePickerAction.TurnShip(CabinLayout.TURN_DEGREES))
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * ScenePickerControls.ROW_HEIGHT).dp)) {
+                ZoneButton("Launch / replay Starship", Modifier.fillMaxHeight().weight(.7f), acceptPointerClick = true) { model.starshipFlight(true) }
+                ZoneButton("End flight", Modifier.fillMaxHeight().weight(.3f), acceptPointerClick = true) { model.starshipFlight(false) }
+            }
+            ZoneButton("Show / replay Roadster", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .12f).dp),
+                acceptPointerClick = true) { model.replayRoadster() }
         }
-        ZoneButton("Show / replay Roadster", Modifier.fillMaxWidth().height((PosterGrid.PANEL_DP * .12f).dp),
-            acceptPointerClick = true) { model.replayRoadster() }
         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             Text(
-                "$flightStatus\nStaged flight · Earth view · pauses during Quiet cinema",
+                if (currentLocation == TheatreLocation.SPACESHIP_CABIN)
+                    "Choose a seat · Turn the ship to change the view"
+                else "$flightStatus\nStaged flight · Earth view · pauses during Quiet cinema",
                 color = Muted,
                 fontSize = 22.sp,
                 textAlign = TextAlign.Center,

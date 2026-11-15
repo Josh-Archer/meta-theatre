@@ -18,6 +18,9 @@ internal object SceneControls {
 
 internal sealed interface ScenePickerAction {
     data class SelectLocation(val location: TheatreLocation) : ScenePickerAction
+    data class Sit(val seat: CabinSeat) : ScenePickerAction
+    data class TurnShip(val degrees: Float) : ScenePickerAction
+    data object PinScreen : ScenePickerAction
     data object ResetDefault : ScenePickerAction
     data object Done : ScenePickerAction
     data object LaunchStarship : ScenePickerAction
@@ -36,7 +39,7 @@ internal object ScenePickerControls {
     const val FLIGHT_ROW_BOTTOM = FLIGHT_ROW_TOP + ROW_HEIGHT
     const val ROADSTER_ROW_BOTTOM = FLIGHT_ROW_BOTTOM + .12f
 
-    fun at(x: Float, y: Float): ScenePickerAction? {
+    fun at(x: Float, y: Float, location: TheatreLocation = TheatreLocation.EARTH_ORBIT): ScenePickerAction? {
         if (!x.isFinite() || !y.isFinite() || x < 0f || x >= 1f) return null
         if (y in ENV_ROW_TOP..ENV_ROW_BOTTOM) {
             val entries = TheatreLocation.entries
@@ -45,6 +48,16 @@ internal object ScenePickerControls {
         }
         if (y in ACTION_ROW_TOP..ACTION_ROW_BOTTOM) {
             return if (x < 0.5f) ScenePickerAction.ResetDefault else ScenePickerAction.Done
+        }
+        if (location == TheatreLocation.SPACESHIP_CABIN) {
+            if (y >= FLIGHT_ROW_TOP && y < FLIGHT_ROW_BOTTOM)
+                return ScenePickerAction.Sit(CabinSeat.entries[(x * 3).toInt()])
+            if (y >= FLIGHT_ROW_BOTTOM && y < ROADSTER_ROW_BOTTOM) return when {
+                x < 1f / 3f -> ScenePickerAction.TurnShip(-CabinLayout.TURN_DEGREES)
+                x < 2f / 3f -> ScenePickerAction.PinScreen
+                else -> ScenePickerAction.TurnShip(CabinLayout.TURN_DEGREES)
+            }
+            return null
         }
         if (y >= FLIGHT_ROW_TOP && y < FLIGHT_ROW_BOTTOM) {
             return if (x < .7f) ScenePickerAction.LaunchStarship else ScenePickerAction.StopStarship

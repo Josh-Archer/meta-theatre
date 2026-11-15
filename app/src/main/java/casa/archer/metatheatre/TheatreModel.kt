@@ -130,6 +130,7 @@ class TheatreModel(
     /** True puts the movie in front of the shelf. False brings the shelf back. */
     var onWatching: ((Boolean) -> Unit)? = null
 
+    internal var onCabinAction: ((ScenePickerAction) -> Unit)? = null
     var onViewTurn: ((Float) -> Unit)? = null
     var onVisitorsReturn: (() -> Unit)? = null
     internal var onRoadsterReplay: (() -> Unit)? = null
@@ -214,6 +215,7 @@ class TheatreModel(
         onPrepareScreen = null
         onWatching = null
         onViewTurn = null
+        onCabinAction = null
         onVisitorsReturn = null
         onRoadsterReplay = null
         onStarshipFlight = null
@@ -693,16 +695,21 @@ class TheatreModel(
 
     fun scenePickerPress(x: Float, y: Float): Boolean {
         if (!scenePickerOpen.value) return false
-        when (val action = ScenePickerControls.at(x, y)) {
+        when (val action = ScenePickerControls.at(x, y, currentLocation.value)) {
             is ScenePickerAction.SelectLocation -> selectLocation(action.location)
             ScenePickerAction.ResetDefault -> resetCurrentLocationToDefault()
             ScenePickerAction.Done -> closeScenePicker()
             ScenePickerAction.LaunchStarship -> starshipFlight(true)
             ScenePickerAction.StopStarship -> starshipFlight(false)
             ScenePickerAction.ReplayRoadster -> replayRoadster()
+            is ScenePickerAction.Sit, is ScenePickerAction.TurnShip, ScenePickerAction.PinScreen -> cabinAction(action)
             null -> Unit
         }
         return true
+    }
+
+    internal fun cabinAction(action: ScenePickerAction) {
+        if (currentLocation.value == TheatreLocation.SPACESHIP_CABIN) onCabinAction?.invoke(action)
     }
 
     fun starshipFlight(start: Boolean) {

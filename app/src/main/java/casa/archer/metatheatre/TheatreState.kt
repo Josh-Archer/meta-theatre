@@ -59,7 +59,15 @@ internal class TheatreState(context: Context) {
         val raw = prefs.getString(key, null)
         if (raw != null) {
             return runCatching {
-                SceneSettings.fromJson(JSONObject(raw), default)
+                val json = JSONObject(raw)
+                val loaded = SceneSettings.fromJson(json, default)
+                // Migrate only the untouched old floating cabin preset; preserve custom placements.
+                if (location == TheatreLocation.SPACESHIP_CABIN && !json.has("shipYaw") &&
+                    (loaded.screenPose.t - Vector3(0f, 1.35f, 3.2f)).length() < .001f &&
+                    kotlin.math.abs(loaded.screenPose.q.y) > .999f) {
+                    loaded.copy(screenPose = default.screenPose,
+                        seat = if (loaded.seat == SeatSetting()) default.seat else loaded.seat)
+                } else loaded
             }.getOrDefault(default)
         }
         if (location == TheatreLocation.EARTH_ORBIT && prefs.contains("width") && prefs.contains("height")) {
@@ -165,12 +173,14 @@ internal data class SceneSettings(
     val screenSize: ScreenSize,
     val screenPose: Pose,
     val seat: SeatSetting,
+    val shipYaw: Float = 0f,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("width", screenSize.width.toDouble())
         put("height", screenSize.height.toDouble())
         put("screenPose", poseToJson(screenPose))
         put("seat", seat.toJson())
+        put("shipYaw", shipYaw.toDouble())
     }
     companion object {
         fun fromJson(json: JSONObject, default: SceneSettings): SceneSettings = runCatching {
@@ -183,7 +193,8 @@ internal data class SceneSettings(
             } ?: default.screenSize
             val screenPose = json.optJSONObject("screenPose")?.let { poseFromJson(it, default.screenPose) } ?: default.screenPose
             val seat = json.optJSONObject("seat")?.let { SeatSetting.fromJson(it, default.seat) } ?: default.seat
-            SceneSettings(size, screenPose, seat)
+            SceneSettings(size, screenPose, seat, json.optDouble("shipYaw", 0.0).toFloat()
+                .takeIf { it.isFinite() }?.let(CabinLayout::heading) ?: 0f)
         }.getOrDefault(default)
     }
 }

@@ -143,6 +143,7 @@ class TheatreActivity : AppSystemActivity() {
     private var videoHeight = EarthOrbit.screenHeight
     private val playerWidth = Stage.PLAYER_WIDTH
     private val playerHeight = Stage.PLAYER_HEIGHT
+    private var shipYaw = 0f
     private var currentLocation = TheatreLocation.EARTH_ORBIT
     private var locationEntities: List<Entity> = emptyList()
 
@@ -165,6 +166,7 @@ class TheatreActivity : AppSystemActivity() {
         }
         model.onQuietCinemaPreference = quietCinema::setPreferenceEnabled
         model.onViewTurn = ::turnView
+        model.onCabinAction = ::applyCabinAction
         model.onVisitorsReturn = { spaceVisitorRenderer?.returnModels() }
         model.onRoadsterReplay = {
             if (immersiveFocused) {
@@ -272,6 +274,7 @@ class TheatreActivity : AppSystemActivity() {
         scene.setReferenceSpace(ReferenceSpace.LOCAL_FLOOR)
         currentLocation = model.state.currentLocation
         val initialSettings = model.state.sceneSettings(currentLocation)
+        shipYaw = initialSettings.shipYaw
         scene.setViewOrigin(
             initialSettings.seat.x,
             initialSettings.seat.y,
@@ -298,7 +301,7 @@ class TheatreActivity : AppSystemActivity() {
         panelBackingRenderer = PanelBackingRenderer(this).also { it.create() }
         locomotionTargets = LocomotionTargets()
 
-        locationEntities = buildLocation(currentLocation)
+        locationEntities = buildLocation(currentLocation, shipYaw)
         spaceVisitorRenderer = SpaceVisitorRenderer().also {
             it.setWorldFrame(earthExploration.skyFrame)
             it.create()
@@ -402,6 +405,53 @@ class TheatreActivity : AppSystemActivity() {
         runStarshipTest()
         runRoadsterReview()
         runLocationTest()
+        runCabinTest()
+    }
+
+    private fun runCabinTest() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            !intent.getBooleanExtra("metatheatre.test_cabin", false)) return
+        scope.launch {
+            delay(2_000)
+            if (!immersiveFocused) {
+                Log.w(TAG, "Cabin diagnostic needs immersive focus")
+                return@launch
+            }
+            model.selectLocation(TheatreLocation.SPACESHIP_CABIN)
+            val saved = model.state.sceneSettings(currentLocation)
+            try {
+                for (seat in CabinSeat.entries) {
+                    model.cabinAction(ScenePickerAction.Sit(seat))
+                    delay(200)
+                    val target = CabinLayout.rotate(Pose(seat.eye), shipYaw).t
+                    val actual = scene.getViewerPose().t
+                    Log.i(TAG, "Cabin seat check $seat expected=$target actual=$actual")
+                    check((actual - target).length() < .25f) { "Couch eye position differs from target" }
+                }
+                val before = scene.getViewerPose()
+                val earthBefore = earthExploration.skyFrame
+                model.cabinAction(ScenePickerAction.TurnShip(15f))
+                delay(200)
+                val actual = scene.getViewerPose()
+                val target = CabinLayout.rotate(before, 15f)
+                Log.i(TAG, "Cabin turn check expected=$target actual=$actual")
+                check((actual.t - target.t).length() < .25f) { "Ship turn moved viewer relative to cabin" }
+                check(((actual.q * Vector3(0f, 0f, 1f)) - (target.q * Vector3(0f, 0f, 1f))).length() < .25f)
+                check(earthExploration.skyFrame == earthBefore) { "Ship turn moved exterior" }
+                model.cabinAction(ScenePickerAction.PinScreen)
+                check((checkNotNull(grip).screenPose().t - CabinLayout.rotate(SpaceshipCabin.defaultScreenPose, shipYaw).t).length() < .001f)
+                Log.i(TAG, "Cabin diagnostic passed: three seats, ship turn, fixed exterior, wall screen")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) { Log.e(TAG, "Cabin diagnostic failed", error) }
+            finally {
+                shipYaw = saved.shipYaw
+                applyCabinHeading(locationEntities, shipYaw)
+                scene.setViewOrigin(saved.seat.x, saved.seat.y, saved.seat.z, saved.seat.yaw)
+                grip?.restoreSize(saved.screenSize)
+                grip?.restorePose(saved.screenPose)
+                model.state.saveSceneSettings(currentLocation, saved)
+            }
+        }
     }
 
     private fun runRoadsterReview() {
@@ -930,6 +980,36 @@ class TheatreActivity : AppSystemActivity() {
         )
     }
 
+    private fun applyCabinAction(action: ScenePickerAction) {
+        if (!immersiveFocused || currentLocation != TheatreLocation.SPACESHIP_CABIN) return
+        val g = grip ?: return
+        spaceVisitorRenderer?.cancelGrab()
+        g.cancelEarthGrab()
+        g.suspendInput()
+        when (action) {
+            is ScenePickerAction.Sit -> {
+                val seat = CabinLayout.seatedOrigin(action.seat, shipYaw, currentSeatSetting(), scene.getViewerPose())
+                scene.setViewOrigin(seat.x, seat.y, seat.z, seat.yaw)
+            }
+            is ScenePickerAction.TurnShip -> {
+                if (!action.degrees.isFinite()) return
+                val seat = CabinLayout.turnedOrigin(currentSeatSetting(), scene.getViewerPose(), action.degrees)
+                shipYaw = CabinLayout.heading(shipYaw + action.degrees)
+                applyCabinHeading(locationEntities, shipYaw)
+                g.restorePose(CabinLayout.rotate(g.screenPose(), action.degrees))
+                scene.setViewOrigin(seat.x, seat.y, seat.z, seat.yaw)
+            }
+            ScenePickerAction.PinScreen -> {
+                g.restoreSize(defaultScreenSize(currentLocation))
+                g.restorePose(CabinLayout.rotate(SpaceshipCabin.defaultScreenPose, shipYaw))
+            }
+            else -> return
+        }
+        g.syncOverlays(force = true)
+        saveCurrentSceneSettings()
+        Log.i(TAG, "cabin action=$action heading=$shipYaw seat=${currentSeatSetting()}")
+    }
+
     private fun turnView(degrees: Float) {
         if (!immersiveFocused) return
         spaceVisitorRenderer?.cancelGrab()
@@ -949,7 +1029,7 @@ class TheatreActivity : AppSystemActivity() {
         val seat = currentSeatSetting()
         val size = g.screenSize()
         val pose = g.screenPose()
-        model.state.saveSceneSettings(currentLocation, SceneSettings(size, pose, seat))
+        model.state.saveSceneSettings(currentLocation, SceneSettings(size, pose, seat, shipYaw))
     }
 
     private fun applyLocationChange(location: TheatreLocation) {
@@ -959,8 +1039,9 @@ class TheatreActivity : AppSystemActivity() {
         locationEntities.forEach { it.destroy() }
         currentLocation = location
         model.state.currentLocation = location
-        locationEntities = buildLocation(location)
         val settings = model.state.sceneSettings(location)
+        shipYaw = settings.shipYaw
+        locationEntities = buildLocation(location, shipYaw)
         scene.setViewOrigin(settings.seat.x, settings.seat.y, settings.seat.z, settings.seat.yaw)
         grip?.let { g ->
             g.restoreSize(settings.screenSize)
@@ -973,6 +1054,8 @@ class TheatreActivity : AppSystemActivity() {
     private fun applyResetSceneSettings(location: TheatreLocation) {
         if (location != currentLocation) return
         val defaults = defaultSceneSettings(location)
+        shipYaw = 0f
+        if (location == TheatreLocation.SPACESHIP_CABIN) applyCabinHeading(locationEntities, shipYaw)
         scene.setViewOrigin(defaults.seat.x, defaults.seat.y, defaults.seat.z, defaults.seat.yaw)
         grip?.let { g ->
             g.restoreSize(defaults.screenSize)
