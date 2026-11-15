@@ -104,10 +104,11 @@ def texture(im, packed_roughness=False):
         values = np.array(im.pixels[:], dtype=np.float32).reshape(im.size[1], im.size[0], 4)
         values[:, :, 0] = 1
         values[:, :, 2:] = 1
-        packed = bpy.data.images.new('Satin_ORM_export', width=im.size[0], height=im.size[1], alpha=False)
+        stem = im.name.split('.')[0].removesuffix('_roughness') + '_ORM'
+        packed = bpy.data.images.new(stem + '_export', width=im.size[0], height=im.size[1], alpha=False)
         packed.colorspace_settings.name = 'Non-Color'
         packed.pixels.foreach_set(values.ravel())
-        path = ROOT / 'art/textures/cabin_20261114/Satin_ORM.png'
+        path = ROOT / ('art/textures/cabin_20261114/' + stem + '.png')
         packed.filepath_raw = str(path)
         packed.file_format = 'PNG'
         packed.save()

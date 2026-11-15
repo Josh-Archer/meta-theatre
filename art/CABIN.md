@@ -3,7 +3,9 @@
 The November 14 cabin replaces the spaceship interior's flat finishes with
 satin ceramic liners, brushed metal frames, a matte composite deck, upholstered
 side benches, recessed light strips, fitted consoles, ventilation grilles and a
-split pressure door. The panoramic openings, original shell geometry, seat
+split pressure door. The cushions retain a nearly-new appearance, with shallow
+sitting impressions, fine seam compression and slight contact-area sheen.
+The panoramic openings, original shell geometry, seat
 position and default film-panel clearance are preserved.
 
 The native app loads the finished `app/src/main/assets/hull.glb` using its existing
@@ -19,7 +21,11 @@ identity transform. No application code or scene-selection changes are required.
 - `exports/cabin_20261114/hull.glb`: reviewed native export.
 - `exports/cabin_20261114/hull_before.glb`: unchanged original for geometry audit.
 - `renders/cabin_20261114/cabin-overview.png` and `cabin-detail.png`: Cycles renders
-  of the final exported GLB. `cabin-unreal.png` is the Unreal editor preview.
+  of the final exported GLB. `cabin-upholstery.png` shows the restrained fabric wear
+  in close-up. `cabin-unreal.png` is the Unreal editor preview.
+
+`scripts/preview_cabin.py` prepares a review scene from the exported GLB with
+overview, bench and upholstery cameras.
 
 The previews use authoring lights. They do not establish the appearance or frame
 rate of the native Quest renderer. The GLB exports PBR materials and emissive

@@ -75,6 +75,23 @@ deck_n[:, :, 1] = .5 + np.sin(x * math.tau * 64) * np.cos(y * math.tau * 64) * .
 deck_n[:, :, 2] = np.sqrt(1 - ((deck_n[:, :, :2] * 2 - 1) ** 2).sum(2)) * .5 + .5
 deck_normal = image('Composite_deck_normal', deck_n, True)
 
+# Nearly-new upholstery: a small change in fiber sheen at the contact area.
+# No stains, tears or broad discoloration. UVs cover an individual cushion.
+contact = np.exp(-(((x - .54) / .30) ** 2 + ((y - .49) / .31) ** 2) * 1.4)
+seat_base = np.ones((n, n, 3), np.float32) * np.array([.073, .10, .125])
+seat_base *= (1 + .045 * contact + .012 * grain)[:, :, None]
+# PNG base colors are sRGB; the existing fabric factor is scene-linear.
+seat_base = np.where(seat_base <= .0031308, seat_base * 12.92,
+                     1.055 * seat_base ** (1 / 2.4) - .055)
+seat_base_image = image('Seat_fabric_base', seat_base)
+seat_rough = .87 - .045 * contact + grain * .012
+seat_rough_image = image('Seat_fabric_roughness', np.repeat(seat_rough[:, :, None], 3, 2), True)
+seat_n = np.empty((n, n, 3), np.float32)
+seat_n[:, :, 0] = .5 + .065 * np.cos(x * math.tau * 384) * np.sin(y * math.tau * 288)
+seat_n[:, :, 1] = .5 + .065 * np.sin(x * math.tau * 384) * np.cos(y * math.tau * 288)
+seat_n[:, :, 2] = np.sqrt(1 - ((seat_n[:, :, :2] * 2 - 1) ** 2).sum(2)) * .5 + .5
+seat_normal_image = image('Seat_fabric_normal', seat_n, True)
+
 
 def material(name, color, metal=0, roughness=.5, base=None, normal_map=None,
              rough_map=None, emission=None):
@@ -120,6 +137,10 @@ bronze = material('Cabin | champagne alloy', (.32, .23, .13), .8, .36,
 fabric = material('Cabin | woven slate upholstery', (.073, .10, .125), 0, .87,
                   normal_map=deck_normal)
 next(n for n in fabric.node_tree.nodes if n.type == 'NORMAL_MAP').inputs['Strength'].default_value = .14
+seat_fabric = material('Cabin | gently settled seat fabric', (.073, .10, .125), 0, .87,
+                       base=seat_base_image, normal_map=seat_normal_image,
+                       rough_map=seat_rough_image)
+next(n for n in seat_fabric.node_tree.nodes if n.type == 'NORMAL_MAP').inputs['Strength'].default_value = .22
 white = material('Cabin | warm light diffuser', (.88, .85, .76), 0, .35,
                  emission=(1, .84, .62))
 cyan = material('Cabin | ice blue indicator', (.03, .22, .28), .1, .4,
@@ -175,6 +196,75 @@ def tube(name, points, radius, mat, resolution=3):
     o = bpy.data.objects.new(name, data)
     scene.collection.objects.link(o)
     return assign(o, mat, name)
+
+
+def settled_cushion(loc, side, wear, index):
+    """Rounded fabric cushion with a shallow, asymmetric sitting impression."""
+    dims = np.array([.94, .71, .24])
+    half = dims / 2
+    radius = .075
+    inner = half - radius
+    divisions = [24, 18, 4]
+    vertices, faces, face_axes, lookup = [], [], [], {}
+
+    def vertex(p):
+        core = np.clip(p, -inner, inner)
+        direction = p - core
+        p = core + direction / np.linalg.norm(direction) * radius
+        # Two broad contact lobes plus a light compression ripple by the seam.
+        xx, yy, zz = p
+        upper = np.clip((zz - (half[2] - radius)) / radius, 0, 1)
+        upper = upper * upper * (3 - 2 * upper)
+        center_x = side * (.055 + index * .006)
+        contact = math.exp(-(((xx - center_x) / .25) ** 2 + ((yy + .014) / .23) ** 2) * 1.2)
+        lobes = sum(math.exp(-(((xx - center_x) / .19) ** 2 +
+                              ((yy - dy) / .10) ** 2) * 1.4) for dy in [-.085, .085])
+        dent = -.012 * wear * (.62 * contact + .38 * lobes)
+        creases = sum(math.exp(-((yy - dy) / .035) ** 2) for dy in [-.245, .235])
+        ripple = .0012 * wear * creases * math.exp(-((xx + side * .30) / .15) ** 2) * math.sin(xx * 28 + index)
+        p[2] += upper * (dent + ripple)
+        key = tuple(round(float(v), 8) for v in p)
+        if key not in lookup:
+            lookup[key] = len(vertices)
+            vertices.append(tuple(p))
+        return lookup[key]
+
+    for axis in range(3):
+        u, v = [a for a in range(3) if a != axis]
+        for sign in [-1, 1]:
+            grid = {}
+            for i in range(divisions[u] + 1):
+                for j in range(divisions[v] + 1):
+                    p = np.zeros(3)
+                    p[axis] = sign * half[axis]
+                    p[u] = (i / divisions[u] - .5) * dims[u]
+                    p[v] = (j / divisions[v] - .5) * dims[v]
+                    grid[i, j] = vertex(p)
+            for i in range(divisions[u]):
+                for j in range(divisions[v]):
+                    face = [grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]]
+                    if sign * (-1 if axis == 1 else 1) < 0:
+                        face.reverse()
+                    faces.append(face)
+                    face_axes.append((axis, sign, u, v))
+    mesh = bpy.data.meshes.new('Gently settled cushion surface')
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new('Upholstered seat cushion - light use', mesh)
+    scene.collection.objects.link(obj)
+    obj.location = loc
+    assign(obj, fabric, obj.name)
+    mesh.materials.append(seat_fabric)
+    uv = mesh.uv_layers.new(name='Cushion surface')
+    for polygon, (axis, sign, u, v) in zip(mesh.polygons, face_axes):
+        polygon.use_smooth = True
+        polygon.material_index = int(axis == 2 and sign == 1)
+        for loop in polygon.loop_indices:
+            p = mesh.vertices[mesh.loops[loop].vertex_index].co
+            uv.data[loop].uv = (p[u] / dims[u] + .5, p[v] / dims[v] + .5)
+    obj['use_level'] = wear
+    obj['finish_note'] = 'Nearly-new upholstery: shallow sitting impression and slight seam compression'
+    return obj
 
 
 def arch(name, yy, rad, depth, thick, mat, a0=0, a1=math.pi, segments=72):
@@ -324,16 +414,21 @@ for side in [-1, 1]:
     yy = .35
     box('Bench recessed foot', (xx, yy, .12), (.78, 2.9, .23), rubber, .055)
     box('Bench shell', (xx, yy, .37), (.99, 3.04, .27), frame, .08)
-    for dy in [-1.10, -.367, .367, 1.10]:
-        box('Upholstered seat cushion', (xx - side * .025, yy + dy, .59),
-            (.94, .71, .24), fabric, .075)
+    for index, dy in enumerate([-1.10, -.367, .367, 1.10]):
+        wear = [.16, .80, .58, .24][index if side < 0 else 3 - index]
+        settled_cushion((xx - side * .025, yy + dy, .59), side, wear, index)
         box('Upholstered back cushion', (xx + side * .40, yy + dy, .97),
             (.19, .71, .73), fabric, .065, (0, side * -.12, 0))
         # Continuous piping is geometry so it survives the native importer.
-        tube('Seat cushion stitched welt', [(xx - .40, yy + dy - .29, .65),
-             (xx + .39, yy + dy - .29, .65), (xx + .39, yy + dy + .29, .65),
-             (xx - .40, yy + dy + .29, .65), (xx - .40, yy + dy - .29, .65)],
-             .005, ink, 1)
+        welt = []
+        for cx, cy, start in [(.395, .280, 0), (-.395, .280, 90),
+                              (-.395, -.280, 180), (.395, -.280, 270)]:
+            for angle in np.linspace(start, start + 90, 9):
+                a = math.radians(angle)
+                welt.append((xx - side * .025 + cx + .075 * math.cos(a),
+                             yy + dy + cy + .075 * math.sin(a), .618))
+        welt.append(welt[0])
+        tube('Seat cushion stitched welt', welt, .0025, fabric, 1)
     for dy in [-1.49, 1.49]:
         box('Bench end cheek', (xx, yy + dy, .63), (1.04, .12, .67), metal, .05)
         box('Bench padded arm', (xx - side * .03, yy + dy, .99), (.92, .16, .08), fabric, .035)

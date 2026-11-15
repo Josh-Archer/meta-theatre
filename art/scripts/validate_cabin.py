@@ -49,7 +49,7 @@ after, b1, raw1 = load(FOLDER / 'hull.glb')
 t0, t1 = triangles(before, b0), triangles(after, b1)
 assert not (triangle_counter(t0) - triangle_counter(t1)), 'Original shell geometry changed'
 assert len(t0) == 25402
-assert 25402 < len(t1) <= 125000
+assert 25402 < len(t1) <= 140000
 assert len(after['meshes']) <= 12
 assert not after.get('extensionsRequired') and not after.get('extensionsUsed')
 assert not after.get('animations') and not after.get('skins')
@@ -87,7 +87,7 @@ for im in after['images']:
     assert picture.size == (1024, 1024)
     images.append({'name': im['name'], 'dimensions': list(picture.size),
                    'sha256': hashlib.sha256(payload).hexdigest()})
-assert len(images) == 5
+assert len(images) == 8
 report = {'before_triangles': len(t0), 'triangles': len(t1),
           'original_shell_triangles_exact': True, 'material_draws': len(after['meshes']),
           'original_bytes': len(raw0), 'bytes': len(raw1), 'images': images,

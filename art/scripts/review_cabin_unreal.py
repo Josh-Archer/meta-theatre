@@ -38,10 +38,11 @@ for path in paths:
     elif isinstance(obj, unreal.MaterialInterface):
         materials.append(path)
     assets.save_asset(path, only_if_is_dirty=False)
-assert len(meshes) == 11, len(meshes)
+expected = json.loads((ROOT / 'art/validation/cabin-20261114/export.json').read_text())
+assert len(meshes) == len(expected['draws']), len(meshes)
 count = sum(mesh.get_num_triangles(0) for mesh in meshes)
-assert count == 115544, count
-assert textures and all(t['dimensions'] == [1024, 1024] for t in textures)
+assert count == expected['triangles'], count
+assert len(textures) == 8 and all(t['dimensions'] == [1024, 1024] for t in textures)
 
 map_path = DEST + '/ObservationCabin'
 if assets.does_asset_exist(map_path):
