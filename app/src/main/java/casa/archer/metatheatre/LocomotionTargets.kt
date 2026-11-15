@@ -31,15 +31,29 @@ internal class LocomotionTargets {
                 unlit = true
             },
             SupportsLocomotion(),
-            Transform(Pose(position)),
+            Transform(Pose(position + Vector3(0f, .025f, 0f))),
             Visible(false),
         )
     }
     private var visible = false
+    private val navigationVisibility = NavigationTargetVisibility()
+
+    fun updateNavigation(active: Boolean, now: Long) {
+        show(navigationVisibility.update(active, now))
+    }
 
     fun show(value: Boolean) {
         if (value == visible) return
         visible = value
         pads.forEach { it.setComponent(Visible(value)) }
+    }
+}
+
+/** Bridge short tracking gaps without flashing teleport pads on and off. */
+internal class NavigationTargetVisibility {
+    private var lastActive: Long? = null
+    fun update(active: Boolean, now: Long): Boolean {
+        if (active) lastActive = now
+        return active || lastActive?.let { now - it in 0L..200L } == true
     }
 }

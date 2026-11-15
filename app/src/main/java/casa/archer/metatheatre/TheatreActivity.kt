@@ -821,7 +821,9 @@ class TheatreActivity : AppSystemActivity() {
 
     override fun onSceneTick() {
         super.onSceneTick()
-        locomotionTargets?.show(handLocomotion?.areHandsInUse() == true)
+        if (immersiveFocused) locomotionTargets?.updateNavigation(
+            handLocomotion?.areHandsInUse() == true, android.os.SystemClock.uptimeMillis())
+        else locomotionTargets?.show(false)
         // A solar cycle changes by only 0.0042 degrees per second; no frame-rate updates needed.
         updateSolarEnvironment()
         if (immersiveFocused && screen != null) {

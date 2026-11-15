@@ -501,7 +501,9 @@ internal class ScreenGripSystem(
                 hands.add(HandInput(id, down, pose.t.dot(screenPose.right().times(-1f)),
                     pose.t.dot(screenPose.up()), pose.t.dot(screenPose.forward()),
                     onVideo = aimed?.onFace == true && !overControls && railSelections[id] == null,
-                    allowAction = ownsCursor))
+                    allowAction = ownsCursor,
+                    resizeEligible = !overControls && railSelections[id] == null &&
+                        ScreenResizeAim.accepts(pose, screenPose, screenSize())))
                 continue
             }
             val held = grab

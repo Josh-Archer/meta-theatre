@@ -11,6 +11,7 @@ internal data class HandInput(
     val z: Float,
     val onVideo: Boolean,
     val allowAction: Boolean = true,
+    val resizeEligible: Boolean = false,
 )
 
 internal data class HandActions(
@@ -44,12 +45,12 @@ internal class MovieHandGestures {
         for (hand in hands) {
             val wasDown = previous[hand.id]
             // A newly tracked hand must open first: reacquisition cannot start a gesture.
-            if (wasDown == false && hand.pinching && hand.onVideo) pinches[hand.id] = Pinch(hand, nowMs)
+            if (wasDown == false && hand.pinching && (hand.onVideo || hand.resizeEligible)) pinches[hand.id] = Pinch(hand, nowMs)
             val pinch = pinches[hand.id]
             if (pinch != null) {
                 pinch.travel = maxOf(pinch.travel, distance(pinch.start, hand))
                 if (!hand.pinching) {
-                    if (!pinch.consumed && pinch.start.allowAction && hand.allowAction && hand.onVideo && nowMs - pinch.startedMs <= TAP_MS && pinch.travel < TAP_TRAVEL) {
+                    if (!pinch.consumed && pinch.start.onVideo && pinch.start.allowAction && hand.allowAction && hand.onVideo && nowMs - pinch.startedMs <= TAP_MS && pinch.travel < TAP_TRAVEL) {
                         taps.add(hand.id)
                     }
                     pinches.remove(hand.id)
@@ -65,7 +66,7 @@ internal class MovieHandGestures {
             stretch = null
         }
         if (stretch == null) {
-            val candidates = pinches.entries.filter { !it.value.consumed && tracked[it.key]?.pinching == true }
+            val candidates = pinches.entries.filter { !it.value.consumed && (it.value.start.onVideo || it.value.start.resizeEligible) && tracked[it.key]?.pinching == true }
             if (candidates.size == 2) {
                 val a = candidates[0]
                 val b = candidates[1]
@@ -85,7 +86,7 @@ internal class MovieHandGestures {
         }
         for ((id, pinch) in pinches) {
             val hand = tracked.getValue(id)
-            if (!allowSeek || !pinch.start.allowAction || !hand.allowAction || pinch.consumed || !hand.pinching) continue
+            if (!allowSeek || !pinch.start.onVideo || !pinch.start.allowAction || !hand.allowAction || pinch.consumed || !hand.pinching) continue
             val dx = hand.x - pinch.start.x
             val dy = hand.y - pinch.start.y
             val dz = hand.z - pinch.start.z
