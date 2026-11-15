@@ -1,5 +1,10 @@
 # 3D asset workflow
 
+The [observation cabin](art/CABIN.md) includes the editable Blender source,
+native hull export and Unreal review map. The
+[November 14 validation](art/validation/CABIN_20261114.md) records geometry,
+materials, preview checks, runtime costs and the completed Android build.
+
 The [Starship flight exhibit](art/STARSHIP.md) includes editable spacecraft,
 native launch/orbit/landing animation, Unreal imports and a labeled Blender
 preview. The [November 13 validation](art/validation/STARSHIP_20261113.md) also
