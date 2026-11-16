@@ -10,6 +10,8 @@ and headset installation status are documented in [`art/CHAIR.md`](art/CHAIR.md)
 The modern Roadster with an open roof and Starman, its standalone editable source,
 runtime cost and Unreal review are documented in [`art/ROADSTER.md`](art/ROADSTER.md).
 
+The ISS flyby asset, its PBR maps and byte/memory budget are documented in [`art/ISS.md`](art/ISS.md).
+
 ## Current Meta Theatre app
 
 This project is a native Android/Meta Quest app. It loads `.glb` models from
